@@ -11,7 +11,7 @@ import { ArrowLeft, Plus, Trash2, Save, FileDown, Search } from 'lucide-react';
 import { useInvoiceStore } from '@/store/invoiceStore';
 import { useDatabaseStore } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format as formatDate, parseISO } from 'date-fns';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 interface CreateInvoiceProps {
@@ -69,7 +69,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
       
       // Set default date
       if (!billDate) {
-        setBillDate(format(new Date(), 'dd-MM-yyyy'));
+        setBillDate(formatDate(new Date(), 'dd-MM-yyyy'));
       }
     }
     
@@ -208,8 +208,12 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
         colX = tableStartX;
         const rowY = y;
         page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
-        // Center align all columns with padding
-        const values = [item.po_no || '', item.po_date || '', item.description, String(item.quantity), String(item.unit_price), String(item.amount)];
+        // Format PO date as dd-mm-yyyy
+        const poDate = item.po_date ? (() => {
+          const d = item.po_date.includes('-') ? item.po_date.split('-') : [];
+          return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : item.po_date;
+        })() : '';
+        const values = [item.po_no || '', poDate, item.description, String(item.quantity), String(item.unit_price), String(item.amount)];
         values.forEach((val, i) => {
           const colStart = colX + cellPadding;
           const colEnd = colX + colWidths[i] - cellPadding;
@@ -225,7 +229,13 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
       y -= 10;
       // Totals (left-aligned)
       const labelWidth = font.widthOfTextAtSize('SGST:', valueFontSize);
+      // Add total quantity above base amount in totals section
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
       let totalY = y;
+      page.drawText('Total Quantity:', { x: leftMargin, y: totalY, size: valueFontSize, font });
+      page.drawText(String(totalQuantity), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font });
+      totalY -= valueFontSize + 6;
+      // Totals (left-aligned)
       const totalLines = [
         { label: 'Base:', value: invoice.base_amount },
         { label: 'CGST:', value: invoice.cgst },

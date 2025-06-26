@@ -112,7 +112,11 @@
       "buildResources": "public"
     },
     "win": {
-      "target": "nsis"
-    }
-  }
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "icon": "public/icon.ico"
+  },
+  "description": "A modern, offline-capable invoice management desktop app built with Electron and React.",
+  "author": "Ranganath Saravana"
 }

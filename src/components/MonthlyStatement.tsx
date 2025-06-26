@@ -7,6 +7,7 @@ import { ArrowLeft, FileDown, Calendar } from 'lucide-react';
 import { useDatabaseStore } from '@/store/databaseStore';
 import { format } from 'date-fns';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { toast } from '@/components/ui/use-toast';
 
 interface MonthlyStatementProps {
   onBack: () => void;
@@ -92,7 +93,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
       headers.forEach((header, i) => {
         const colCenter = colX + colWidths[i] / 2;
         const textWidth = fontBold.widthOfTextAtSize(header, 12);
-        page.drawText(header, { x: colCenter - textWidth / 2, y: y, size: 12, font: fontBold });
+        page.drawText(header, { x: colCenter - textWidth / 2, y: y + 3, size: 12, font: fontBold });
         colX += colWidths[i];
       });
       y -= 20;
@@ -101,11 +102,16 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
         colX = tableStartX;
         const rowY = y;
         page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
-        const values = [inv.invoice_no, inv.bill_date, inv.company_name, `INR ${inv.base_amount}`, `INR ${inv.cgst}`, `INR ${inv.sgst}`, `INR ${inv.total_amount}`];
+        // Format date as dd-mm-yyyy
+        const formattedDate = inv.bill_date && inv.bill_date.includes('-') && inv.bill_date.length === 10
+          ? (() => { const d = inv.bill_date.split('-'); return `${d[2]}-${d[1]}-${d[0]}`; })()
+          : inv.bill_date;
+        // Remove INR from table cells, only show numbers
+        const values = [inv.invoice_no, formattedDate, inv.company_name, inv.base_amount, inv.cgst, inv.sgst, inv.total_amount];
         values.forEach((val, i) => {
           const colCenter = colX + colWidths[i] / 2;
-          const textWidth = font.widthOfTextAtSize(val, 12);
-          page.drawText(val, { x: colCenter - textWidth / 2, y: rowY, size: 12, font });
+          const textWidth = font.widthOfTextAtSize(String(val), 12);
+          page.drawText(String(val), { x: colCenter - textWidth / 2, y: rowY + 2, size: 12, font });
           colX += colWidths[i];
         });
         y -= 18;
@@ -113,12 +119,33 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
       // Table border
       page.drawRectangle({ x: tableStartX, y: y + 18, width: tableWidth, height: (filteredInvoices.length + 1) * 18, borderColor: rgb(0.7,0.7,0.7), borderWidth: 1, color: rgb(1,1,1), opacity: 0 });
       y -= 24;
+      // Totals section
+      page.drawLine({ start: { x: tableStartX, y }, end: { x: tableStartX + tableWidth, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
+      y -= 18;
+      const totalsFontSize = 13;
+      const totals = [
+        { label: 'Total Base', value: `INR ${totalStats.baseAmount.toLocaleString('en-IN')}` },
+        { label: 'CGST', value: `INR ${totalStats.cgst.toLocaleString('en-IN')}` },
+        { label: 'SGST', value: `INR ${totalStats.sgst.toLocaleString('en-IN')}` },
+        { label: 'Total Amount', value: `INR ${totalStats.totalAmount.toLocaleString('en-IN')}` },
+      ];
+      totals.forEach((row, i) => {
+        const labelWidth = fontBold.widthOfTextAtSize(row.label, totalsFontSize);
+        const valueWidth = font.widthOfTextAtSize(row.value, totalsFontSize);
+        const labelX = tableStartX + tableWidth - 220;
+        const valueX = tableStartX + tableWidth - valueWidth - 10;
+        page.drawText(row.label, { x: labelX, y: y, size: totalsFontSize, font: fontBold });
+        page.drawText(row.value, { x: valueX, y: y, size: totalsFontSize, font });
+        y -= 18;
+      });
       // Save PDF
       const pdfBytes = await pdfDoc.save();
       const fileName = `Monthly-Statement-${months[selectedMonth]}-${selectedYear}.pdf`;
-      const exportPath = settings.export_folder_path ? `${settings.export_folder_path}/${fileName}` : fileName;
+      const statementsFolder = settings.export_folder_path ? `${settings.export_folder_path}/Statements` : 'Statements';
+      const exportPath = `${statementsFolder}/${fileName}`;
       if (window.electronAPI) {
         await window.electronAPI.exportDatabase(pdfBytes, exportPath);
+        toast({ title: 'PDF exported successfully!', description: `Saved to: ${exportPath}` });
       } else {
         // Web: download
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -287,32 +314,32 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                         </TableCell>
                         <TableCell className="text-slate-600">{invoice.company_name}</TableCell>
                         <TableCell className="text-right">
-                          INR {invoice.base_amount.toLocaleString('en-IN')}
+                          {invoice.base_amount.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right">
-                          INR {invoice.cgst.toLocaleString('en-IN')}
+                          {invoice.cgst.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right">
-                          INR {invoice.sgst.toLocaleString('en-IN')}
+                          {invoice.sgst.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right font-medium text-green-600">
-                          INR {invoice.total_amount.toLocaleString('en-IN')}
+                          {invoice.total_amount.toLocaleString('en-IN')}
                         </TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 border-slate-200 bg-slate-50 font-medium">
                       <TableCell colSpan={3} className="text-right font-bold">Total:</TableCell>
                       <TableCell className="text-right font-bold">
-                        INR {totalStats.baseAmount.toLocaleString('en-IN')}
+                        {totalStats.baseAmount.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold">
-                        INR {totalStats.cgst.toLocaleString('en-IN')}
+                        {totalStats.cgst.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold">
-                        INR {totalStats.sgst.toLocaleString('en-IN')}
+                        {totalStats.sgst.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold text-green-600">
-                        INR {totalStats.totalAmount.toLocaleString('en-IN')}
+                        {totalStats.totalAmount.toLocaleString('en-IN')}
                       </TableCell>
                     </TableRow>
                   </TableBody>

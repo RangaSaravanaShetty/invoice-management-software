@@ -64,8 +64,23 @@ npm run dist          # Packages the Electron app into an installer (requires el
 - **PDF export issues:** Make sure the export folder is set in settings and you have write permissions.
 - **Node/Electron errors:** Check your Node.js version (v16+ recommended) and reinstall dependencies with `npm install`.
 
+## TODO
+- [ ] Regular backup of database for data redundancy
+- [ ] Implement one time setup during installation
+- [ ] Add more detailed user documentation and screenshots
+- [ ] Implement automatic database backup feature
+- [ ] Add support for multi-user or team access
+- [ ] Improve error handling and user feedback
+- [ ] Add dark mode toggle in settings
+- [ ] Enhance PDF export customization (logo, footer, etc.)
+- [ ] Write more unit and integration tests
+- [ ] Support import/export of data (CSV, JSON)
+- [ ] Visual Improvements
+- [ ] Check for updates and update mechanism
+
+
 ## Contributing
-Pull requests and issues are welcome!
+Suggestions, Pull requests and issues are welcome!
 
 ## License
 MIT

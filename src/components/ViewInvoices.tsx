@@ -174,7 +174,12 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
       y -= 10;
       // Totals (left-aligned)
       const labelWidth = font.widthOfTextAtSize('SGST:', valueFontSize);
+      // Add total quantity above base amount in totals section
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
       let totalY = y;
+      page.drawText('Total Quantity:', { x: leftMargin, y: totalY, size: valueFontSize, font });
+      page.drawText(String(totalQuantity), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font });
+      totalY -= valueFontSize + 6;
       const totalLines = [
         { label: 'Base:', value: invoice.base_amount },
         { label: 'CGST:', value: invoice.cgst },
