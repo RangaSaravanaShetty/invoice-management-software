@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,7 +49,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
     loadInvoiceForEditing,
   } = useInvoiceStore();
 
-  const { clients, items: itemsDb, settings, saveInvoice, loadClients, loadItems } = useDatabaseStore();
+  const { clients, items: itemsDb, settings, saveInvoice, loadClients, loadItems, generateInvoiceNumber } = useDatabaseStore();
 
   useEffect(() => {
     loadClients();
@@ -60,10 +59,9 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
       // Load existing invoice for editing
       loadInvoiceForEditing(editingInvoice);
     } else {
-      // Generate invoice number for new invoice
+      // Generate proper sequential invoice number for new invoice
       if (!invoiceNo) {
-        const nextNumber = String(Date.now()).slice(-4);
-        setInvoiceNo(`${settings.invoice_prefix}${nextNumber.padStart(settings.invoice_padding, '0')}`);
+        generateInvoiceNumber().then(setInvoiceNo);
       }
       
       // Set default date
@@ -469,6 +467,11 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Footer with credits */}
+        <div className="mt-8 text-center text-sm text-slate-500">
+          <p>© 2024 Developed by Ranganath Saravana</p>
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -173,6 +172,11 @@ const Index = () => {
                     </div>
                   </CardContent>
                 </Card>
+              </div>
+
+              {/* Footer with credits */}
+              <div className="mt-12 text-center text-sm text-slate-500">
+                <p>© 2024 Developed by Ranganath Saravana</p>
               </div>
             </div>
           </div>

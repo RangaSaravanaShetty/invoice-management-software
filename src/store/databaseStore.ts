@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import initSqlJs from 'sql.js';
 
@@ -64,6 +63,7 @@ interface DatabaseState {
   saveInvoice: (invoice: any) => Promise<void>;
   loadInvoices: () => Promise<void>;
   deleteInvoice: (id: number) => Promise<void>;
+  generateInvoiceNumber: () => Promise<string>;
   
   // Settings operations
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
@@ -327,6 +327,35 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   },
 
   // Invoice operations
+  generateInvoiceNumber: async () => {
+    const { db, settings } = get();
+    if (!db) return 'INV0001';
+    
+    try {
+      // Get the highest invoice number for the current prefix
+      const result = db.exec(`
+        SELECT invoice_no FROM invoices 
+        WHERE invoice_no LIKE '${settings.invoice_prefix}%' 
+        ORDER BY CAST(SUBSTR(invoice_no, ${settings.invoice_prefix.length + 1}) AS INTEGER) DESC 
+        LIMIT 1
+      `);
+      
+      let nextNumber = 1;
+      
+      if (result[0] && result[0].values.length > 0) {
+        const lastInvoiceNo = result[0].values[0][0] as string;
+        const numberPart = lastInvoiceNo.substring(settings.invoice_prefix.length);
+        nextNumber = parseInt(numberPart) + 1;
+      }
+      
+      const paddedNumber = nextNumber.toString().padStart(settings.invoice_padding, '0');
+      return `${settings.invoice_prefix}${paddedNumber}`;
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      return `${settings.invoice_prefix}${'1'.padStart(settings.invoice_padding, '0')}`;
+    }
+  },
+
   saveInvoice: async (invoice) => {
     const { db } = get();
     if (!db) return;
