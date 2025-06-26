@@ -19,7 +19,7 @@ A modern, cross-platform desktop application for managing invoices, clients, and
 
 ### 1. Clone the Repository
 ```sh
-git clone <YOUR_GIT_URL>
+git clone https://github.com/RangaSaravanaShetty/invoice-management-software.git
 cd invoice-management-software
 ```
 
