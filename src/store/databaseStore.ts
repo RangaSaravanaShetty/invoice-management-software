@@ -71,7 +71,27 @@ interface DatabaseState {
   
   // Metrics
   loadMetrics: () => Promise<void>;
+
+  // Helper to persist DB after changes
+  persistDb: () => Promise<void>;
 }
+
+// Utility to detect Electron
+const isElectron = () => typeof window !== 'undefined' && !!window.electronAPI;
+
+const getSqlJsLocateFile = async () => {
+  if (isElectron()) {
+    const wasmPath = await window.electronAPI.getSqlWasmPath();
+    console.log('[sql.js] Electron mode: using WASM path', wasmPath);
+    return () => wasmPath;
+  } else {
+    return file => {
+      const cdnPath = `https://sql.js.org/dist/${file}`;
+      console.log('[sql.js] Browser mode: using CDN path', cdnPath);
+      return cdnPath;
+    };
+  }
+};
 
 export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   db: null,
@@ -100,80 +120,141 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   initializeDatabase: async () => {
     try {
+      const locateFile = await getSqlJsLocateFile();
       const SQL = await initSqlJs({
-        locateFile: file => `https://sql.js.org/dist/${file}`
+        locateFile
       });
-      
-      // Try to load existing database from localStorage
-      const savedDb = localStorage.getItem('invoicedb');
+      console.log('[sql.js] WASM loaded successfully');
       let db;
-      
-      if (savedDb) {
-        const data = new Uint8Array(JSON.parse(savedDb));
-        db = new SQL.Database(data);
+      if (isElectron()) {
+        // Try to load from file
+        const result = await window.electronAPI.readDatabaseFile();
+        if (result.success && result.data) {
+          const data = new Uint8Array(result.data);
+          db = new SQL.Database(data);
+        } else {
+          db = new SQL.Database();
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS clients (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              address TEXT,
+              gstin TEXT
+            );
+            CREATE TABLE IF NOT EXISTS items (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              description TEXT NOT NULL,
+              hsn TEXT,
+              unit_price REAL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS invoices (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              invoice_no TEXT UNIQUE,
+              bill_date TEXT,
+              client_id INTEGER,
+              company_name TEXT,
+              base_amount REAL DEFAULT 0,
+              cgst REAL DEFAULT 0,
+              sgst REAL DEFAULT 0,
+              total_amount REAL DEFAULT 0,
+              items_json TEXT,
+              FOREIGN KEY (client_id) REFERENCES clients (id)
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+              id INTEGER PRIMARY KEY DEFAULT 1,
+              company_name TEXT DEFAULT 'Your Company',
+              address TEXT DEFAULT 'Your Address',
+              gstin TEXT DEFAULT 'Your GSTIN',
+              phone TEXT DEFAULT 'Your Phone',
+              email TEXT DEFAULT 'your@email.com',
+              logo_base64 TEXT DEFAULT '',
+              invoice_prefix TEXT DEFAULT 'INV',
+              invoice_padding INTEGER DEFAULT 4,
+              cgst_percent REAL DEFAULT 9,
+              sgst_percent REAL DEFAULT 9,
+              export_folder_path TEXT DEFAULT ''
+            );
+            INSERT OR IGNORE INTO settings (id) VALUES (1);
+          `);
+          // Save initial db to file
+          const data = db.export();
+          await window.electronAPI.writeDatabaseFile(Array.from(data));
+        }
       } else {
-        db = new SQL.Database();
-        
-        // Create tables
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            address TEXT,
-            gstin TEXT
-          );
-          
-          CREATE TABLE IF NOT EXISTS items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            description TEXT NOT NULL,
-            hsn TEXT,
-            unit_price REAL DEFAULT 0
-          );
-          
-          CREATE TABLE IF NOT EXISTS invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_no TEXT UNIQUE,
-            bill_date TEXT,
-            client_id INTEGER,
-            company_name TEXT,
-            base_amount REAL DEFAULT 0,
-            cgst REAL DEFAULT 0,
-            sgst REAL DEFAULT 0,
-            total_amount REAL DEFAULT 0,
-            items_json TEXT,
-            FOREIGN KEY (client_id) REFERENCES clients (id)
-          );
-          
-          CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY DEFAULT 1,
-            company_name TEXT DEFAULT 'Your Company',
-            address TEXT DEFAULT 'Your Address',
-            gstin TEXT DEFAULT 'Your GSTIN',
-            phone TEXT DEFAULT 'Your Phone',
-            email TEXT DEFAULT 'your@email.com',
-            logo_base64 TEXT DEFAULT '',
-            invoice_prefix TEXT DEFAULT 'INV',
-            invoice_padding INTEGER DEFAULT 4,
-            cgst_percent REAL DEFAULT 9,
-            sgst_percent REAL DEFAULT 9,
-            export_folder_path TEXT DEFAULT ''
-          );
-          
-          INSERT OR IGNORE INTO settings (id) VALUES (1);
-        `);
+        // Web: use localStorage
+        const savedDb = localStorage.getItem('invoicedb');
+        if (savedDb) {
+          const data = new Uint8Array(JSON.parse(savedDb));
+          db = new SQL.Database(data);
+        } else {
+          db = new SQL.Database();
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS clients (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              address TEXT,
+              gstin TEXT
+            );
+            CREATE TABLE IF NOT EXISTS items (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              description TEXT NOT NULL,
+              hsn TEXT,
+              unit_price REAL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS invoices (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              invoice_no TEXT UNIQUE,
+              bill_date TEXT,
+              client_id INTEGER,
+              company_name TEXT,
+              base_amount REAL DEFAULT 0,
+              cgst REAL DEFAULT 0,
+              sgst REAL DEFAULT 0,
+              total_amount REAL DEFAULT 0,
+              items_json TEXT,
+              FOREIGN KEY (client_id) REFERENCES clients (id)
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+              id INTEGER PRIMARY KEY DEFAULT 1,
+              company_name TEXT DEFAULT 'Your Company',
+              address TEXT DEFAULT 'Your Address',
+              gstin TEXT DEFAULT 'Your GSTIN',
+              phone TEXT DEFAULT 'Your Phone',
+              email TEXT DEFAULT 'your@email.com',
+              logo_base64 TEXT DEFAULT '',
+              invoice_prefix TEXT DEFAULT 'INV',
+              invoice_padding INTEGER DEFAULT 4,
+              cgst_percent REAL DEFAULT 9,
+              sgst_percent REAL DEFAULT 9,
+              export_folder_path TEXT DEFAULT ''
+            );
+            INSERT OR IGNORE INTO settings (id) VALUES (1);
+          `);
+          const data = db.export();
+          localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
+        }
       }
-      
       set({ db });
-      
-      // Load initial data
       await get().loadClients();
       await get().loadItems();
       await get().loadInvoices();
       await get().loadSettings();
       await get().loadMetrics();
-      
     } catch (error) {
-      console.error('Failed to initialize database:', error);
+      console.error('[sql.js] Failed to load WASM or initialize database:', error);
+      throw error;
+    }
+  },
+
+  // Helper to persist DB after changes
+  persistDb: async () => {
+    const { db } = get();
+    if (!db) return;
+    const data = db.export();
+    if (isElectron()) {
+      await window.electronAPI.writeDatabaseFile(Array.from(data));
+    } else {
+      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
     }
   },
 
@@ -181,17 +262,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   addClient: async (client) => {
     const { db } = get();
     if (!db) return;
-    
     try {
       db.run(
         'INSERT INTO clients (name, address, gstin) VALUES (?, ?, ?)',
         [client.name, client.address, client.gstin]
       );
-      
-      // Save to localStorage
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadClients();
     } catch (error) {
       console.error('Error adding client:', error);
@@ -201,16 +277,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   updateClient: async (id, client) => {
     const { db } = get();
     if (!db) return;
-    
     try {
       db.run(
         'UPDATE clients SET name = ?, address = ?, gstin = ? WHERE id = ?',
         [client.name, client.address, client.gstin, id]
       );
-      
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadClients();
     } catch (error) {
       console.error('Error updating client:', error);
@@ -220,13 +292,9 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   deleteClient: async (id) => {
     const { db } = get();
     if (!db) return;
-    
     try {
       db.run('DELETE FROM clients WHERE id = ?', [id]);
-      
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadClients();
     } catch (error) {
       console.error('Error deleting client:', error);
@@ -263,9 +331,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         [item.description, item.hsn, item.unit_price]
       );
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadItems();
     } catch (error) {
       console.error('Error adding item:', error);
@@ -282,9 +348,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         [item.description, item.hsn, item.unit_price, id]
       );
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadItems();
     } catch (error) {
       console.error('Error updating item:', error);
@@ -298,9 +362,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     try {
       db.run('DELETE FROM items WHERE id = ?', [id]);
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadItems();
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -385,9 +447,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         ]);
       }
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadInvoices();
       await get().loadMetrics();
     } catch (error) {
@@ -428,9 +488,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     try {
       db.run('DELETE FROM invoices WHERE id = ?', [id]);
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadInvoices();
       await get().loadMetrics();
     } catch (error) {
@@ -460,9 +518,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         newSettings.cgst_percent, newSettings.sgst_percent, newSettings.export_folder_path
       ]);
       
-      const data = db.export();
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
-      
+      await get().persistDb();
       await get().loadSettings();
     } catch (error) {
       console.error('Error updating settings:', error);

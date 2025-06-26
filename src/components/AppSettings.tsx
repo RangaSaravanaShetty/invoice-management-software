@@ -151,8 +151,8 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
   };
 
   const handleSelectFolder = async () => {
-    if (window && (window as any).electronAPI) {
-      const folderPath = await (window as any).electronAPI.selectFolder();
+    if (window && window.electronAPI && window.electronAPI.selectFolder) {
+      const folderPath = await window.electronAPI.selectFolder();
       if (folderPath) {
         setFormData({ ...formData, export_folder_path: folderPath });
       }

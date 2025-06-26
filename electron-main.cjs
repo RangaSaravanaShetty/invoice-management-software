@@ -51,6 +51,37 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0];
 });
 
+const dbFilePath = path.join(app.getPath('userData'), 'invoicedb.bin');
+
+// IPC handler to read the database file
+ipcMain.handle('read-database-file', async () => {
+  try {
+    if (fs.existsSync(dbFilePath)) {
+      const data = fs.readFileSync(dbFilePath);
+      return { success: true, data: Array.from(data) };
+    } else {
+      return { success: false, error: 'Database file does not exist.' };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC handler to write the database file
+ipcMain.handle('write-database-file', async (event, { data }) => {
+  try {
+    fs.writeFileSync(dbFilePath, Buffer.from(data), 'binary');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC handler to return the correct path to sql-wasm.wasm using process.resourcesPath
+ipcMain.handle('get-sql-wasm-path', () => {
+  return path.join(process.resourcesPath, 'sql-wasm.wasm');
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();

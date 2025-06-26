@@ -102,6 +102,12 @@
       "preload.js",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
+      }
+    ],
     "directories": {
       "buildResources": "public"
     },
