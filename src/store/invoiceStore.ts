@@ -45,6 +45,7 @@ interface InvoiceState {
   setCgstPercent: (percent: number) => void;
   setSgstPercent: (percent: number) => void;
   resetInvoice: () => void;
+  loadInvoiceForEditing: (invoice: any) => void;
   
   // Computed values
   getBaseAmount: () => number;
@@ -108,6 +109,17 @@ export const useInvoiceStore = create<InvoiceState>((set, get) => ({
       invoiceNo: '',
       companyName: '',
     }),
+
+  loadInvoiceForEditing: (invoice) => {
+    const items = invoice.items_json ? JSON.parse(invoice.items_json) : [];
+    set({
+      items,
+      clientId: invoice.client_id,
+      billDate: invoice.bill_date,
+      invoiceNo: invoice.invoice_no,
+      companyName: invoice.company_name,
+    });
+  },
 
   getBaseAmount: () => {
     const { items } = get();

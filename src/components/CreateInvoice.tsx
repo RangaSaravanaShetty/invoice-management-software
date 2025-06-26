@@ -6,7 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Trash2, Save, FileDown } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ArrowLeft, Plus, Trash2, Save, FileDown, Search } from 'lucide-react';
 import { useInvoiceStore } from '@/store/invoiceStore';
 import { useDatabaseStore } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
@@ -14,11 +16,14 @@ import { format } from 'date-fns';
 
 interface CreateInvoiceProps {
   onBack: () => void;
+  editingInvoice?: any;
 }
 
-const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
+const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
   
   const {
     items,
@@ -42,6 +47,7 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
     getCgstAmount,
     getSgstAmount,
     getTotalAmount,
+    loadInvoiceForEditing,
   } = useInvoiceStore();
 
   const { clients, items: itemsDb, settings, saveInvoice, loadClients, loadItems } = useDatabaseStore();
@@ -50,21 +56,26 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
     loadClients();
     loadItems();
     
-    // Generate invoice number
-    if (!invoiceNo) {
-      const nextNumber = String(Date.now()).slice(-4);
-      setInvoiceNo(`${settings.invoice_prefix}${nextNumber.padStart(settings.invoice_padding, '0')}`);
-    }
-    
-    // Set default date
-    if (!billDate) {
-      setBillDate(format(new Date(), 'yyyy-MM-dd'));
+    if (editingInvoice) {
+      // Load existing invoice for editing
+      loadInvoiceForEditing(editingInvoice);
+    } else {
+      // Generate invoice number for new invoice
+      if (!invoiceNo) {
+        const nextNumber = String(Date.now()).slice(-4);
+        setInvoiceNo(`${settings.invoice_prefix}${nextNumber.padStart(settings.invoice_padding, '0')}`);
+      }
+      
+      // Set default date
+      if (!billDate) {
+        setBillDate(format(new Date(), 'yyyy-MM-dd'));
+      }
     }
     
     // Set default tax rates
     setCgstPercent(settings.cgst_percent);
     setSgstPercent(settings.sgst_percent);
-  }, []);
+  }, [editingInvoice]);
 
   const handleClientChange = (clientIdStr: string) => {
     const selectedClientId = parseInt(clientIdStr);
@@ -76,20 +87,24 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
     }
   };
 
+  const handleAddItemFromSearch = (selectedItem: any) => {
+    addItem();
+    const newIndex = items.length;
+    updateItem(newIndex, {
+      item_id: selectedItem.id!,
+      description: selectedItem.description,
+      hsn: selectedItem.hsn,
+      unit_price: selectedItem.unit_price,
+      quantity: 1,
+      po_no: '',
+      po_date: '',
+    });
+    setSearchOpen(false);
+    setSearchValue('');
+  };
+
   const handleItemChange = (index: number, field: string, value: any) => {
-    if (field === 'item_id' && value) {
-      const selectedItem = itemsDb.find(item => item.id === parseInt(value));
-      if (selectedItem) {
-        updateItem(index, {
-          item_id: selectedItem.id!,
-          description: selectedItem.description,
-          hsn: selectedItem.hsn,
-          unit_price: selectedItem.unit_price,
-        });
-      }
-    } else {
-      updateItem(index, { [field]: value });
-    }
+    updateItem(index, { [field]: value });
   };
 
   const handleSaveInvoice = async () => {
@@ -105,6 +120,7 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
     setLoading(true);
     try {
       const invoice = {
+        id: editingInvoice?.id,
         invoice_no: invoiceNo,
         bill_date: billDate,
         client_id: clientId,
@@ -120,7 +136,7 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
       
       toast({
         title: "Success",
-        description: "Invoice saved successfully!",
+        description: editingInvoice ? "Invoice updated successfully!" : "Invoice saved successfully!",
       });
       
       resetInvoice();
@@ -195,7 +211,7 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
             Back to Dashboard
           </Button>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-            Create Invoice
+            {editingInvoice ? 'Edit Invoice' : 'Create Invoice'}
           </h1>
         </div>
 
@@ -277,22 +293,57 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
             <Card className="shadow-lg border-0">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-lg text-slate-800">Line Items</CardTitle>
-                <Button onClick={addItem} className="bg-gradient-to-r from-blue-500 to-purple-600">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Item
-                </Button>
+                <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button className="bg-gradient-to-r from-blue-500 to-purple-600">
+                      <Search className="h-4 w-4 mr-2" />
+                      Add Item
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search items..." 
+                        value={searchValue}
+                        onValueChange={setSearchValue}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No items found.</CommandEmpty>
+                        <CommandGroup>
+                          {itemsDb
+                            .filter(item => 
+                              item.description.toLowerCase().includes(searchValue.toLowerCase())
+                            )
+                            .map((item) => (
+                            <CommandItem
+                              key={item.id}
+                              onSelect={() => handleAddItemFromSearch(item)}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">{item.description}</span>
+                                <span className="text-sm text-slate-500">
+                                  HSN: {item.hsn} | ₹{item.unit_price}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </CardHeader>
               <CardContent>
                 {items.length === 0 ? (
                   <div className="text-center py-8 text-slate-500">
-                    No items added yet. Click "Add Item" to get started.
+                    No items added yet. Search and add items to get started.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Item</TableHead>
+                          <TableHead>Description</TableHead>
                           <TableHead>HSN</TableHead>
                           <TableHead>PO No</TableHead>
                           <TableHead>PO Date</TableHead>
@@ -305,35 +356,18 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
                       <TableBody>
                         {items.map((item, index) => (
                           <TableRow key={index}>
-                            <TableCell>
-                              <Select
-                                value={item.item_id?.toString()}
-                                onValueChange={(value) => handleItemChange(index, 'item_id', value)}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Select item" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {itemsDb.map((dbItem) => (
-                                    <SelectItem key={dbItem.id} value={dbItem.id!.toString()}>
-                                      {dbItem.description}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                            <TableCell className="font-medium">
+                              {item.description}
                             </TableCell>
                             <TableCell>
-                              <Input
-                                value={item.hsn}
-                                onChange={(e) => handleItemChange(index, 'hsn', e.target.value)}
-                                className="w-20"
-                              />
+                              {item.hsn}
                             </TableCell>
                             <TableCell>
                               <Input
                                 value={item.po_no}
                                 onChange={(e) => handleItemChange(index, 'po_no', e.target.value)}
                                 className="w-24"
+                                placeholder="PO No"
                               />
                             </TableCell>
                             <TableCell>
@@ -353,15 +387,8 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
                                 className="w-16"
                               />
                             </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                value={item.unit_price}
-                                onChange={(e) => handleItemChange(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                                min="0"
-                                step="0.01"
-                                className="w-24"
-                              />
+                            <TableCell className="text-slate-600">
+                              ₹{item.unit_price.toLocaleString('en-IN')}
                             </TableCell>
                             <TableCell className="font-medium">
                               ₹{item.amount.toLocaleString('en-IN')}
@@ -427,7 +454,7 @@ const CreateInvoice = ({ onBack }: CreateInvoiceProps) => {
                     className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   >
                     <Save className="h-4 w-4 mr-2" />
-                    {loading ? 'Saving...' : 'Save Invoice'}
+                    {loading ? 'Saving...' : editingInvoice ? 'Update Invoice' : 'Save Invoice'}
                   </Button>
                   
                   <Button 

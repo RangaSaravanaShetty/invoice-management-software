@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,14 +7,18 @@ import { ArrowLeft, Search, Eye, Edit, Trash2, FileDown, FileText } from 'lucide
 import { useDatabaseStore } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import ViewInvoiceModal from './ViewInvoiceModal';
 
 interface ViewInvoicesProps {
   onBack: () => void;
+  onEditInvoice: (invoice: any) => void;
 }
 
-const ViewInvoices = ({ onBack }: ViewInvoicesProps) => {
+const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
   
   const { invoices, loadInvoices, deleteInvoice } = useDatabaseStore();
 
@@ -27,6 +30,15 @@ const ViewInvoices = ({ onBack }: ViewInvoicesProps) => {
     invoice.invoice_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
     invoice.company_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleView = (invoice: any) => {
+    setSelectedInvoice(invoice);
+    setViewModalOpen(true);
+  };
+
+  const handleEdit = (invoice: any) => {
+    onEditInvoice(invoice);
+  };
 
   const handleDelete = async (invoice: any) => {
     if (window.confirm(`Are you sure you want to delete invoice ${invoice.invoice_no}?`)) {
@@ -129,6 +141,7 @@ const ViewInvoices = ({ onBack }: ViewInvoicesProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
+                              onClick={() => handleView(invoice)}
                               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                               title="View Details"
                             >
@@ -137,6 +150,7 @@ const ViewInvoices = ({ onBack }: ViewInvoicesProps) => {
                             <Button
                               variant="ghost"
                               size="sm"
+                              onClick={() => handleEdit(invoice)}
                               className="text-green-600 hover:text-green-700 hover:bg-green-50"
                               title="Edit Invoice"
                             >
@@ -217,6 +231,16 @@ const ViewInvoices = ({ onBack }: ViewInvoicesProps) => {
             </Card>
           </div>
         )}
+
+        {/* View Invoice Modal */}
+        <ViewInvoiceModal 
+          invoice={selectedInvoice}
+          isOpen={viewModalOpen}
+          onClose={() => {
+            setViewModalOpen(false);
+            setSelectedInvoice(null);
+          }}
+        />
       </div>
     </div>
   );
