@@ -27,7 +27,8 @@ app.whenReady().then(createWindow);
 // Listen for backup request from renderer
 ipcMain.handle('export-database', async (event, { data, exportPath }) => {
   try {
-    fs.writeFileSync(exportPath, data, 'utf-8');
+    // Write as binary
+    fs.writeFileSync(exportPath, Buffer.from(data), 'binary');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };

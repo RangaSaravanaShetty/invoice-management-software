@@ -83,45 +83,67 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
     }
   };
 
-  const handleBackupData = () => {
-    const dataStr = localStorage.getItem('invoicedb');
-    if (dataStr) {
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Success",
-        description: "Backup created successfully!",
-      });
+  const handleBackupData = async () => {
+    if (isElectron()) {
+      const { db } = useDatabaseStore.getState();
+      if (!db) return;
+      const data = db.export(); // Uint8Array
+      const settings = useDatabaseStore.getState().settings;
+      const exportFolder = settings.export_folder_path;
+      if (!exportFolder) {
+        toast({ title: 'Error', description: 'Export folder not set in settings.', variant: 'destructive' });
+        return;
+      }
+      const fileName = `invoice-backup-${new Date().toISOString().split('T')[0]}.sqlite`;
+      const exportPath = `${exportFolder}/${fileName}`;
+      // Send as Buffer for binary write
+      await window.electronAPI.exportDatabase(Array.from(data), exportPath);
+      toast({ title: 'Success', description: 'Backup created successfully!' });
+    } else {
+      // Browser fallback: JSON
+      const dataStr = localStorage.getItem('invoicedb');
+      if (dataStr) {
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast({ title: 'Success', description: 'Backup created successfully!' });
+      }
     }
   };
 
   const handleRestoreData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+    if (isElectron()) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const uint8 = new Uint8Array(arrayBuffer);
+          // Save to localStorage as JSON string for compatibility
+          localStorage.setItem('invoicedb', JSON.stringify(Array.from(uint8)));
+          window.location.reload();
+        } catch (error) {
+          toast({ title: 'Error', description: 'Failed to restore data. Invalid backup file.', variant: 'destructive' });
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // Browser fallback: JSON
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
           const data = event.target?.result as string;
           localStorage.setItem('invoicedb', data);
-          
-          toast({
-            title: "Success",
-            description: "Data restored successfully! Please refresh the page.",
-          });
+          toast({ title: 'Success', description: 'Data restored successfully! Please refresh the page.' });
         } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to restore data. Invalid backup file.",
-            variant: "destructive",
-          });
+          toast({ title: 'Error', description: 'Failed to restore data. Invalid backup file.', variant: 'destructive' });
         }
       };
       reader.readAsText(file);
@@ -376,7 +398,7 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
                   </p>
                   <Input
                     type="file"
-                    accept=".json"
+                    accept=".sqlite"
                     onChange={handleRestoreData}
                     className="w-full"
                   />
