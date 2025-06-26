@@ -18,7 +18,7 @@ function createWindow() {
   mainWindow.maximize();
 
   // In development, load Vite dev server; in production, load built files
-  const startUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, '/dist/index.html')}`;
+  const startUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, 'dist', 'index.html')}`;
   mainWindow.loadURL(startUrl);
 }
 
