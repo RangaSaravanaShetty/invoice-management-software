@@ -36,10 +36,14 @@ npm run electron-dev
 
 ### 4. Build and Package the Desktop App
 To create a distributable desktop app (for Windows, Mac, or Linux):
+
 ```sh
-npm run build
-# Then package with your preferred Electron packager, e.g. electron-builder or electron-forge
+npm run build         # Builds the React/Vite frontend into the dist/ folder
+npm run dist          # Packages the Electron app into an installer (requires electron-builder)
 ```
+
+- The installer (e.g., .exe for Windows) will be created in the `dist/` or `release/` directory.
+- You can copy this installer to another PC and run it to install the app.
 
 ## Usage
 - On first launch, set your export folder in the app settings.
