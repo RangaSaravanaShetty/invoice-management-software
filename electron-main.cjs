@@ -48,6 +48,10 @@ ipcMain.handle('select-folder', async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+    if (process.env.ELECTRON_START_URL) {
+      // In dev mode, also exit the parent process (concurrently will kill vite)
+      process.exit(0);
+    }
   }
 });
 
