@@ -1,73 +1,67 @@
-# Welcome to your Lovable project
+# Invoice Management Software
 
-## Project info
+A modern, cross-platform desktop application for managing invoices, clients, and items, built with React, Vite, Electron, and TypeScript.
 
-**URL**: https://lovable.dev/projects/60ff4014-6f5c-473b-ac1c-aa61b2836b4e
+## Features
+- Create, view, and manage invoices
+- Export invoices and monthly statements as professional PDFs
+- Automatic PDF backup to a user-specified folder
+- Customizable company and client details
+- Modern, responsive UI with shadcn-ui and Tailwind CSS
+- Electron-powered: runs as a native desktop app on Windows, Mac, and Linux
 
-## How can I edit this code?
+## Prerequisites
+- [Node.js](https://nodejs.org/) (v16 or higher recommended)
+- [npm](https://www.npmjs.com/) (comes with Node.js)
+- [Git](https://git-scm.com/) (for cloning the repository)
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/60ff4014-6f5c-473b-ac1c-aa61b2836b4e) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+### 1. Clone the Repository
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+cd invoice-management-software
 ```
 
-**Edit a file directly in GitHub**
+### 2. Install Dependencies
+```sh
+npm install
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 3. Run the Application (Development Mode)
+This will launch both the React frontend and the Electron desktop window.
+```sh
+npm run electron-dev
+```
 
-**Use GitHub Codespaces**
+### 4. Build and Package the Desktop App
+To create a distributable desktop app (for Windows, Mac, or Linux):
+```sh
+npm run build
+# Then package with your preferred Electron packager, e.g. electron-builder or electron-forge
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Usage
+- On first launch, set your export folder in the app settings.
+- Create invoices, manage clients/items, and export PDFs as needed.
+- All data is stored locally for privacy and speed.
 
-## What technologies are used for this project?
+## Tech Stack
+- [React](https://react.dev/)
+- [Vite](https://vitejs.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Electron](https://www.electronjs.org/)
+- [shadcn-ui](https://ui.shadcn.com/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [pdf-lib](https://pdf-lib.js.org/)
 
-This project is built with:
+## Troubleshooting
+- **White/blank window on launch:** Ensure all dependencies are installed and try `npm run electron-dev` again.
+- **PDF export issues:** Make sure the export folder is set in settings and you have write permissions.
+- **Node/Electron errors:** Check your Node.js version (v16+ recommended) and reinstall dependencies with `npm install`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Contributing
+Pull requests and issues are welcome!
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/60ff4014-6f5c-473b-ac1c-aa61b2836b4e) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## License
+MIT
