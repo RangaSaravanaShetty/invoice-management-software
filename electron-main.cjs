@@ -27,6 +27,11 @@ app.whenReady().then(createWindow);
 // Listen for backup request from renderer
 ipcMain.handle('export-database', async (event, { data, exportPath }) => {
   try {
+    // Ensure directory exists
+    const dir = path.dirname(exportPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     // Write as binary
     fs.writeFileSync(exportPath, Buffer.from(data), 'binary');
     return { success: true };

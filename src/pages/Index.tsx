@@ -21,11 +21,15 @@ const Index = () => {
     // Electron: backup database on close
     if (typeof window !== 'undefined' && window.electronAPI) {
       const handleBeforeUnload = async (e: any) => {
-        const dataStr = localStorage.getItem('invoicedb');
+        const { db } = useDatabaseStore.getState();
         const settings = useDatabaseStore.getState().settings;
-        if (dataStr && settings.export_folder_path) {
-          const exportPath = `${settings.export_folder_path}/invoice-backup-${new Date().toISOString().split('T')[0]}.json`;
-          await window.electronAPI.exportDatabase(dataStr, exportPath);
+        if (db && settings.export_folder_path) {
+          const data = db.export(); // Uint8Array
+          const recoveryFolder = `${settings.export_folder_path}/recovery`;
+          const fileName = `recovery-backup-${new Date().toISOString().split('T')[0]}.sqlite`;
+          const exportPath = `${recoveryFolder}/${fileName}`;
+          // Ensure recovery folder exists (handled in Electron main)
+          await window.electronAPI.exportDatabase(Array.from(data), exportPath);
         }
       };
       window.addEventListener('beforeunload', handleBeforeUnload);
