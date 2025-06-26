@@ -17,6 +17,20 @@ const Index = () => {
 
   useEffect(() => {
     initializeDatabase();
+
+    // Electron: backup database on close
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      const handleBeforeUnload = async (e: any) => {
+        const dataStr = localStorage.getItem('invoicedb');
+        const settings = useDatabaseStore.getState().settings;
+        if (dataStr && settings.export_folder_path) {
+          const exportPath = `${settings.export_folder_path}/invoice-backup-${new Date().toISOString().split('T')[0]}.json`;
+          await window.electronAPI.exportDatabase(dataStr, exportPath);
+        }
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
   }, []);
 
   useEffect(() => {
@@ -176,7 +190,7 @@ const Index = () => {
 
               {/* Footer with credits */}
               <div className="mt-12 text-center text-sm text-slate-500">
-                <p>© 2024 Developed by Ranganath Saravana</p>
+                <p>© 2025 Developed by Ranganath Saravana</p>
               </div>
             </div>
           </div>

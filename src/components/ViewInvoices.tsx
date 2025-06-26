@@ -8,6 +8,7 @@ import { useDatabaseStore } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import ViewInvoiceModal from './ViewInvoiceModal';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 interface ViewInvoicesProps {
   onBack: () => void;
@@ -19,8 +20,9 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [pdfExportLoadingId, setPdfExportLoadingId] = useState<number | null>(null);
   
-  const { invoices, loadInvoices, deleteInvoice } = useDatabaseStore();
+  const { invoices, loadInvoices, deleteInvoice, settings, clients } = useDatabaseStore();
 
   useEffect(() => {
     loadInvoices();
@@ -55,6 +57,184 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           variant: "destructive",
         });
       }
+    }
+  };
+
+  // Add a local function for amount in words
+  function convertToWords(num: number): string {
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    if (num === 0) return 'Zero';
+    let result = '';
+    if (num >= 10000000) { result += convertToWords(Math.floor(num / 10000000)) + ' Crore '; num %= 10000000; }
+    if (num >= 100000) { result += convertToWords(Math.floor(num / 100000)) + ' Lakh '; num %= 100000; }
+    if (num >= 1000) { result += convertToWords(Math.floor(num / 1000)) + ' Thousand '; num %= 1000; }
+    if (num >= 100) { result += ones[Math.floor(num / 100)] + ' Hundred '; num %= 100; }
+    if (num >= 20) { result += tens[Math.floor(num / 10)] + ' '; num %= 10; }
+    else if (num >= 10) { result += teens[num - 10] + ' '; return result.trim(); }
+    if (num > 0) { result += ones[num] + ' '; }
+    return result.trim();
+  }
+
+  const handleExportPDF = async (invoice: any) => {
+    setPdfExportLoadingId(invoice.id);
+    try {
+      const client = clients.find(c => c.id === invoice.client_id);
+      const company = settings;
+      const items = JSON.parse(invoice.items_json);
+      // Create PDF
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size in points
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      let y = 800;
+      // Standardize font sizes and alignments in handleExportPDF PDF export
+      const leftMargin = 40;
+      const sectionSpacing = 18;
+      const labelFontSize = 12;
+      const valueFontSize = 12;
+      const headingFontSize = 22;
+      const subheadingFontSize = 14;
+      // Company name (centered, bold)
+      const companyNameWidth = fontBold.widthOfTextAtSize(company.company_name, headingFontSize);
+      page.drawText(company.company_name, { x: (595.28 - companyNameWidth) / 2, y, size: headingFontSize, font: fontBold });
+      y -= headingFontSize + 6;
+      // Address, GSTIN, Phone, Email (centered)
+      const addressLine = company.address;
+      const gstinLine = `GSTIN: ${company.gstin}`;
+      const phoneEmailLine = `Phone: ${company.phone}  Email: ${company.email}`;
+      const addressWidth = font.widthOfTextAtSize(addressLine, valueFontSize);
+      const gstinWidth = font.widthOfTextAtSize(gstinLine, valueFontSize);
+      const phoneEmailWidth = font.widthOfTextAtSize(phoneEmailLine, valueFontSize);
+      page.drawText(addressLine, { x: (595.28 - addressWidth) / 2, y, size: valueFontSize, font });
+      y -= valueFontSize + 2;
+      page.drawText(gstinLine, { x: (595.28 - gstinWidth) / 2, y, size: valueFontSize, font });
+      y -= valueFontSize + 2;
+      page.drawText(phoneEmailLine, { x: (595.28 - phoneEmailWidth) / 2, y, size: valueFontSize, font });
+      y -= 10;
+      // Draw a line
+      page.drawLine({ start: { x: leftMargin, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
+      y -= 24; // Increase the gap for more space
+      // Invoice number (left), date below (left)
+      page.drawText(`Invoice No: ${invoice.invoice_no}`, { x: leftMargin, y, size: labelFontSize, font });
+      y -= labelFontSize + 2;
+      const formattedDate = invoice.bill_date.includes('-') && invoice.bill_date.length === 10
+        ? invoice.bill_date.split('-').reverse().join('-')
+        : invoice.bill_date;
+      page.drawText(`Date: ${formattedDate}`, { x: leftMargin, y, size: labelFontSize, font });
+      y -= sectionSpacing;
+      // Bill To (bold)
+      page.drawText('Bill To:', { x: leftMargin, y, size: subheadingFontSize, font: fontBold });
+      y -= subheadingFontSize + 2;
+      // Client name (bold)
+      page.drawText(`${client?.name || ''}`, { x: leftMargin + 20, y, size: valueFontSize, font: fontBold });
+      y -= valueFontSize + 2;
+      // Client address (regular)
+      page.drawText(`${client?.address || ''}`, { x: leftMargin + 20, y, size: valueFontSize, font });
+      y -= 28; // Add +4 to previous spacing for more gap
+      // Table (centered, with lines)
+      const pageWidth = 595.28;
+      const margin = 40;
+      const tableWidth = pageWidth - margin * 2;
+      const tableStartX = margin;
+      const colWidths = [tableWidth * 0.16, tableWidth * 0.16, tableWidth * 0.28, tableWidth * 0.12, tableWidth * 0.14, tableWidth * 0.14];
+      const headers = ['PO No', 'PO Date', 'Description', 'Qty', 'Rate', 'Amount'];
+      let colX = tableStartX;
+      const cellPadding = 10;
+      // Table header background
+      page.drawRectangle({ x: tableStartX, y: y - 4, width: tableWidth, height: 20, color: rgb(0.92,0.92,0.92) });
+      // Table header
+      headers.forEach((header, i) => {
+        const colCenter = colX + colWidths[i] / 2;
+        const textWidth = fontBold.widthOfTextAtSize(header, 12);
+        page.drawText(header, { x: colCenter - textWidth / 2, y: y + 2, size: 12, font: fontBold });
+        colX += colWidths[i];
+      });
+      y -= 20;
+      // Table rows with lines
+      items.forEach((item: any, idx: number) => {
+        colX = tableStartX;
+        const rowY = y;
+        page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
+        // Center align all columns with padding
+        const values = [item.po_no || '', item.po_date || '', item.description, String(item.quantity), String(item.unit_price), String(item.amount)];
+        values.forEach((val, i) => {
+          const colStart = colX + cellPadding;
+          const colEnd = colX + colWidths[i] - cellPadding;
+          const colCenter = (colStart + colEnd) / 2;
+          const textWidth = font.widthOfTextAtSize(val, 12);
+          page.drawText(val, { x: colCenter - textWidth / 2, y: rowY + 2, size: 12, font });
+          colX += colWidths[i];
+        });
+        y -= 18;
+      });
+      // Table border
+      page.drawRectangle({ x: tableStartX, y: y + 18, width: tableWidth, height: (items.length + 1) * 18, borderColor: rgb(0.7,0.7,0.7), borderWidth: 1, color: rgb(1,1,1), opacity: 0 });
+      y -= 10;
+      // Totals (left-aligned)
+      const labelWidth = font.widthOfTextAtSize('SGST:', valueFontSize);
+      let totalY = y;
+      const totalLines = [
+        { label: 'Base:', value: invoice.base_amount },
+        { label: 'CGST:', value: invoice.cgst },
+        { label: 'SGST:', value: invoice.sgst },
+      ];
+      totalLines.forEach(line => {
+        page.drawText(line.label, { x: leftMargin, y: totalY, size: valueFontSize, font });
+        page.drawText('INR', { x: leftMargin + labelWidth + 8, y: totalY, size: valueFontSize, font });
+        page.drawText(String(line.value), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font });
+        totalY -= valueFontSize + 6;
+      });
+      page.drawText('Total:', { x: leftMargin, y: totalY, size: valueFontSize, font: fontBold });
+      page.drawText('INR', { x: leftMargin + labelWidth + 8, y: totalY, size: valueFontSize, font: fontBold });
+      page.drawText(String(invoice.total_amount), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font: fontBold });
+      y = totalY - sectionSpacing;
+      // Amount in words (centered, fixed)
+      const amountWords = convertToWords(Math.round(invoice.total_amount));
+      const amountWordsText = `Amount in Words: ${amountWords} Rupees Only`;
+      const amountWordsWidth = font.widthOfTextAtSize(amountWordsText, valueFontSize);
+      page.drawText(amountWordsText, { x: (pageWidth - amountWordsWidth) / 2, y, size: valueFontSize, font });
+      // After drawing amount in words
+      const leftSectionY = y - 40;
+      const rightSectionY = y - 40;
+      // Left: Received Goods, Receiver Sign, Vehicle Number
+      page.drawText('Received Goods in Good Condition', { x: leftMargin, y: leftSectionY, size: valueFontSize, font });
+      page.drawText('Receiver Sign', { x: leftMargin, y: leftSectionY - 20, size: valueFontSize, font });
+      page.drawText('Vehicle Number', { x: leftMargin, y: leftSectionY - 40, size: valueFontSize, font });
+      // Right: For <Company Name> and Authorised Signatory, center-aligned to each other
+      const forCompanyText = `For ${company.company_name}`;
+      const authorisedText = 'Authorised Signatory';
+      const rightBlockWidth = Math.max(
+        fontBold.widthOfTextAtSize(forCompanyText, valueFontSize),
+        font.widthOfTextAtSize(authorisedText, valueFontSize)
+      );
+      const rightBlockX = 595.28 - leftMargin - rightBlockWidth;
+      page.drawText(forCompanyText, { x: rightBlockX + (rightBlockWidth - fontBold.widthOfTextAtSize(forCompanyText, valueFontSize)) / 2, y: rightSectionY, size: valueFontSize, font: fontBold });
+      page.drawText(authorisedText, { x: rightBlockX + (rightBlockWidth - font.widthOfTextAtSize(authorisedText, valueFontSize)) / 2, y: rightSectionY - 20, size: valueFontSize, font });
+      // Save PDF
+      const pdfBytes = await pdfDoc.save();
+      const fileName = `${invoice.invoice_no}.pdf`;
+      const exportPath = settings.export_folder_path ? `${settings.export_folder_path}/${fileName}` : fileName;
+      if (window.electronAPI) {
+        await window.electronAPI.exportDatabase(pdfBytes, exportPath);
+      } else {
+        // Web: download
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      toast({ title: 'PDF Exported', description: 'PDF export successful!', variant: 'default' });
+    } catch (err) {
+      toast({ title: 'PDF Export Error', description: String(err), variant: 'destructive' });
+    } finally {
+      setPdfExportLoadingId(null);
     }
   };
 
@@ -121,7 +301,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                       <TableRow key={invoice.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium">{invoice.invoice_no}</TableCell>
                         <TableCell>
-                          {format(new Date(invoice.bill_date), 'dd MMM yyyy')}
+                          {(() => { const d = invoice.bill_date.split('-'); return `${d[2]}-${d[1]}-${d[0]}`; })()}
                         </TableCell>
                         <TableCell className="text-slate-600">{invoice.company_name}</TableCell>
                         <TableCell className="text-right">
@@ -161,6 +341,8 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                               size="sm"
                               className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
                               title="Export PDF"
+                              onClick={() => handleExportPDF(invoice)}
+                              disabled={pdfExportLoadingId === invoice.id}
                             >
                               <FileDown className="h-4 w-4" />
                             </Button>

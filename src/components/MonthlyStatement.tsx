@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, FileDown, Calendar } from 'lucide-react';
 import { useDatabaseStore } from '@/store/databaseStore';
 import { format } from 'date-fns';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 interface MonthlyStatementProps {
   onBack: () => void;
@@ -19,7 +19,8 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   
-  const { invoices, loadInvoices } = useDatabaseStore();
+  const { invoices, loadInvoices, settings } = useDatabaseStore();
+  const [pdfExportLoading, setPdfExportLoading] = useState(false);
 
   useEffect(() => {
     loadInvoices();
@@ -42,6 +43,98 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
     cgst: filteredInvoices.reduce((sum, inv) => sum + inv.cgst, 0),
     sgst: filteredInvoices.reduce((sum, inv) => sum + inv.sgst, 0),
     totalAmount: filteredInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
+  };
+
+  const handleExportPDF = async () => {
+    setPdfExportLoading(true);
+    try {
+      const company = settings;
+      // Create PDF
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size in points
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      let y = 800;
+      // Company name (centered, bold)
+      const companyNameWidth = fontBold.widthOfTextAtSize(company.company_name, 22);
+      page.drawText(company.company_name, { x: (595.28 - companyNameWidth) / 2, y, size: 22, font: fontBold });
+      y -= 28;
+      // Address, GSTIN, Phone, Email (centered)
+      const addressLine = company.address;
+      const gstinLine = `GSTIN: ${company.gstin}`;
+      const phoneEmailLine = `Phone: ${company.phone}  Email: ${company.email}`;
+      const addressWidth = font.widthOfTextAtSize(addressLine, 12);
+      const gstinWidth = font.widthOfTextAtSize(gstinLine, 12);
+      const phoneEmailWidth = font.widthOfTextAtSize(phoneEmailLine, 12);
+      page.drawText(addressLine, { x: (595.28 - addressWidth) / 2, y, size: 12, font });
+      y -= 16;
+      page.drawText(gstinLine, { x: (595.28 - gstinWidth) / 2, y, size: 12, font });
+      y -= 16;
+      page.drawText(phoneEmailLine, { x: (595.28 - phoneEmailWidth) / 2, y, size: 12, font });
+      y -= 24;
+      // Draw a line
+      page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
+      y -= 18;
+      // Statement title
+      page.drawText(`Monthly Statement: ${months[selectedMonth]} ${selectedYear}`, { x: 50, y, size: 14, font: fontBold });
+      y -= 24;
+      // Table (centered, with lines)
+      const pageWidth = 595.28;
+      const margin = 40;
+      const tableWidth = pageWidth - margin * 2;
+      const tableStartX = margin;
+      const colWidths = [tableWidth * 0.16, tableWidth * 0.13, tableWidth * 0.18, tableWidth * 0.13, tableWidth * 0.13, tableWidth * 0.13, tableWidth * 0.14];
+      const headers = ['Invoice No', 'Date', 'Client', 'Base', 'CGST', 'SGST', 'Total'];
+      let colX = tableStartX;
+      // Table header background
+      page.drawRectangle({ x: tableStartX, y: y - 4, width: tableWidth, height: 20, color: rgb(0.93,0.95,1) });
+      // Table header
+      headers.forEach((header, i) => {
+        const colCenter = colX + colWidths[i] / 2;
+        const textWidth = fontBold.widthOfTextAtSize(header, 12);
+        page.drawText(header, { x: colCenter - textWidth / 2, y: y, size: 12, font: fontBold });
+        colX += colWidths[i];
+      });
+      y -= 20;
+      // Table rows with lines
+      filteredInvoices.forEach((inv: any, idx: number) => {
+        colX = tableStartX;
+        const rowY = y;
+        page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
+        const values = [inv.invoice_no, inv.bill_date, inv.company_name, `INR ${inv.base_amount}`, `INR ${inv.cgst}`, `INR ${inv.sgst}`, `INR ${inv.total_amount}`];
+        values.forEach((val, i) => {
+          const colCenter = colX + colWidths[i] / 2;
+          const textWidth = font.widthOfTextAtSize(val, 12);
+          page.drawText(val, { x: colCenter - textWidth / 2, y: rowY, size: 12, font });
+          colX += colWidths[i];
+        });
+        y -= 18;
+      });
+      // Table border
+      page.drawRectangle({ x: tableStartX, y: y + 18, width: tableWidth, height: (filteredInvoices.length + 1) * 18, borderColor: rgb(0.7,0.7,0.7), borderWidth: 1, color: rgb(1,1,1), opacity: 0 });
+      y -= 24;
+      // Save PDF
+      const pdfBytes = await pdfDoc.save();
+      const fileName = `Monthly-Statement-${months[selectedMonth]}-${selectedYear}.pdf`;
+      const exportPath = settings.export_folder_path ? `${settings.export_folder_path}/${fileName}` : fileName;
+      if (window.electronAPI) {
+        await window.electronAPI.exportDatabase(pdfBytes, exportPath);
+      } else {
+        // Web: download
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      setPdfExportLoading(false);
+    } catch (err) {
+      setPdfExportLoading(false);
+    }
   };
 
   return (
@@ -102,12 +195,13 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                 </Select>
               </div>
               
-              <Button 
+              <Button
                 className="bg-gradient-to-r from-indigo-500 to-blue-600"
-                disabled={filteredInvoices.length === 0}
+                disabled={filteredInvoices.length === 0 || pdfExportLoading}
+                onClick={handleExportPDF}
               >
                 <FileDown className="h-4 w-4 mr-2" />
-                Export PDF
+                {pdfExportLoading ? 'Exporting...' : 'Export PDF'}
               </Button>
             </div>
           </CardContent>
@@ -119,7 +213,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
             <CardContent className="p-6">
               <div>
                 <p className="text-blue-100 text-sm mb-1">Base Amount</p>
-                <p className="text-2xl font-bold">₹{totalStats.baseAmount.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-bold">INR {totalStats.baseAmount.toLocaleString('en-IN')}</p>
               </div>
             </CardContent>
           </Card>
@@ -128,7 +222,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
             <CardContent className="p-6">
               <div>
                 <p className="text-green-100 text-sm mb-1">CGST</p>
-                <p className="text-2xl font-bold">₹{totalStats.cgst.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-bold">INR {totalStats.cgst.toLocaleString('en-IN')}</p>
               </div>
             </CardContent>
           </Card>
@@ -137,7 +231,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
             <CardContent className="p-6">
               <div>
                 <p className="text-orange-100 text-sm mb-1">SGST</p>
-                <p className="text-2xl font-bold">₹{totalStats.sgst.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-bold">INR {totalStats.sgst.toLocaleString('en-IN')}</p>
               </div>
             </CardContent>
           </Card>
@@ -146,7 +240,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
             <CardContent className="p-6">
               <div>
                 <p className="text-purple-100 text-sm mb-1">Total Revenue</p>
-                <p className="text-2xl font-bold">₹{totalStats.totalAmount.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-bold">INR {totalStats.totalAmount.toLocaleString('en-IN')}</p>
               </div>
             </CardContent>
           </Card>
@@ -193,32 +287,32 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                         </TableCell>
                         <TableCell className="text-slate-600">{invoice.company_name}</TableCell>
                         <TableCell className="text-right">
-                          ₹{invoice.base_amount.toLocaleString('en-IN')}
+                          INR {invoice.base_amount.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right">
-                          ₹{invoice.cgst.toLocaleString('en-IN')}
+                          INR {invoice.cgst.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right">
-                          ₹{invoice.sgst.toLocaleString('en-IN')}
+                          INR {invoice.sgst.toLocaleString('en-IN')}
                         </TableCell>
                         <TableCell className="text-right font-medium text-green-600">
-                          ₹{invoice.total_amount.toLocaleString('en-IN')}
+                          INR {invoice.total_amount.toLocaleString('en-IN')}
                         </TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 border-slate-200 bg-slate-50 font-medium">
                       <TableCell colSpan={3} className="text-right font-bold">Total:</TableCell>
                       <TableCell className="text-right font-bold">
-                        ₹{totalStats.baseAmount.toLocaleString('en-IN')}
+                        INR {totalStats.baseAmount.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold">
-                        ₹{totalStats.cgst.toLocaleString('en-IN')}
+                        INR {totalStats.cgst.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold">
-                        ₹{totalStats.sgst.toLocaleString('en-IN')}
+                        INR {totalStats.sgst.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-right font-bold text-green-600">
-                        ₹{totalStats.totalAmount.toLocaleString('en-IN')}
+                        INR {totalStats.totalAmount.toLocaleString('en-IN')}
                       </TableCell>
                     </TableRow>
                   </TableBody>

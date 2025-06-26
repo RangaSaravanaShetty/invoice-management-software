@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,17 @@ import { useToast } from '@/hooks/use-toast';
 
 interface AppSettingsProps {
   onBack: () => void;
+}
+
+// Add this utility to detect Electron
+const isElectron = () => {
+  return typeof window !== 'undefined' && !!(window).electronAPI;
+};
+
+declare global {
+  interface Window {
+    electronAPI?: any;
+  }
 }
 
 const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
@@ -115,6 +125,15 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
         }
       };
       reader.readAsText(file);
+    }
+  };
+
+  const handleSelectFolder = async () => {
+    if (window && (window as any).electronAPI) {
+      const folderPath = await (window as any).electronAPI.selectFolder();
+      if (folderPath) {
+        setFormData({ ...formData, export_folder_path: folderPath });
+      }
     }
   };
 
@@ -300,13 +319,18 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
 
                   <div>
                     <Label htmlFor="export_folder_path">Export Folder Path</Label>
-                    <Input
-                      id="export_folder_path"
-                      value={formData.export_folder_path}
-                      onChange={(e) => setFormData({ ...formData, export_folder_path: e.target.value })}
-                      className="mt-1"
-                      placeholder="Leave empty for default downloads folder"
-                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Input
+                        id="export_folder_path"
+                        value={formData.export_folder_path}
+                        onChange={(e) => setFormData({ ...formData, export_folder_path: e.target.value })}
+                        className="mt-1"
+                        readOnly={isElectron()}
+                      />
+                      {isElectron() && (
+                        <Button type="button" onClick={handleSelectFolder} className="mt-1">Select Folder</Button>
+                      )}
+                    </div>
                   </div>
 
                   <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-green-500 to-emerald-600">
