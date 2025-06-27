@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -20,6 +20,28 @@ function createWindow() {
   // In development, load Vite dev server; in production, load built files
   const startUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, 'dist', 'index.html')}`;
   mainWindow.loadURL(startUrl);
+
+  // Set custom menu: File > Application Settings, Exit
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Application Settings',
+          click: () => {
+            mainWindow.webContents.send('open-app-settings');
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Exit',
+          role: 'quit',
+        },
+      ],
+    },
+  ];
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }
 
 app.whenReady().then(createWindow);

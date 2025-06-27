@@ -10,6 +10,13 @@ import ViewInvoices from '@/components/ViewInvoices';
 import AppSettings from '@/components/AppSettings';
 import MonthlyStatement from '@/components/MonthlyStatement';
 
+// Add global declaration for electronAPI
+declare global {
+  interface Window {
+    electronAPI?: any;
+  }
+}
+
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
@@ -33,6 +40,16 @@ const Index = () => {
         }
       };
       window.addEventListener('beforeunload', handleBeforeUnload);
+      // Listen for Application Settings menu
+      if (window.electronAPI && window.electronAPI.ipcRenderer && window.electronAPI.ipcRenderer.on) {
+        window.electronAPI.ipcRenderer.on('open-app-settings', () => {
+          setCurrentView('settings');
+        });
+      } else if (window.electronAPI && window.electronAPI.on) {
+        window.electronAPI.on('open-app-settings', () => {
+          setCurrentView('settings');
+        });
+      }
       return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }
   }, []);

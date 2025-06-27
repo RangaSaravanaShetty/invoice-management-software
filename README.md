@@ -72,7 +72,7 @@ npm run dist          # Packages the Electron app into an installer (requires el
 - [ ] Add support for multi-user or team access
 - [ ] Improve error handling and user feedback
 - [ ] Add dark mode toggle in settings
-- [ ] Enhance PDF export customization (logo, footer, etc.)
+- [*] Enhance PDF export customization (logo, footer, etc.)
 - [ ] Write more unit and integration tests
 - [ ] Support import/export of data (CSV, JSON)
 - [ ] Visual Improvements

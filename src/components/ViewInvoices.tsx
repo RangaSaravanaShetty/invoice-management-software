@@ -8,7 +8,9 @@ import { useDatabaseStore } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import ViewInvoiceModal from './ViewInvoiceModal';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import pdfMake from 'pdfmake/build/pdfmake';
+import vfsFonts from 'pdfmake/build/vfs_fonts';
+pdfMake.vfs = vfsFonts.vfs;
 
 interface ViewInvoicesProps {
   onBack: () => void;
@@ -28,10 +30,17 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
     loadInvoices();
   }, []);
 
-  const filteredInvoices = invoices.filter(invoice =>
-    invoice.invoice_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    invoice.company_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredInvoices = invoices
+    .filter(invoice =>
+      invoice.invoice_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Extract numeric part for comparison
+      const numA = parseInt(a.invoice_no.replace(/\D/g, ''));
+      const numB = parseInt(b.invoice_no.replace(/\D/g, ''));
+      return numB - numA;
+    });
 
   const handleView = (invoice: any) => {
     setSelectedInvoice(invoice);
@@ -77,171 +86,217 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
     return result.trim();
   }
 
+  // Helper to robustly round to 2 decimal places
+  function round2(val: any) {
+    const num = typeof val === 'string' ? parseFloat(val) : Number(val);
+    return Math.round((num + Number.EPSILON) * 100) / 100;
+  }
+
+  // Helper to wrap text for PDF table cells
+  function wrapText(text: string, maxWidth: number, font: any, fontSize: number): string[] {
+    if (!text) return [''];
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
+
+  const cellPadding = 10;
+
   const handleExportPDF = async (invoice: any) => {
     setPdfExportLoadingId(invoice.id);
     try {
       const client = clients.find(c => c.id === invoice.client_id);
       const company = settings;
       const items = JSON.parse(invoice.items_json);
-      // Create PDF
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size in points
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      let y = 800;
-      // Standardize font sizes and alignments in handleExportPDF PDF export
-      const leftMargin = 40;
-      const sectionSpacing = 18;
-      const labelFontSize = 12;
-      const valueFontSize = 12;
-      const headingFontSize = 22;
-      const subheadingFontSize = 14;
-      // Company name (centered, bold)
-      const companyNameWidth = fontBold.widthOfTextAtSize(company.company_name, headingFontSize);
-      page.drawText(company.company_name, { x: (595.28 - companyNameWidth) / 2, y, size: headingFontSize, font: fontBold });
-      y -= headingFontSize + 6;
-      // Address, GSTIN, Phone, Email (centered)
-      const addressLine = company.address;
-      const gstinLine = `GSTIN: ${company.gstin}`;
-      const phoneEmailLine = `Phone: ${company.phone}  Email: ${company.email}`;
-      const addressWidth = font.widthOfTextAtSize(addressLine, valueFontSize);
-      const gstinWidth = font.widthOfTextAtSize(gstinLine, valueFontSize);
-      const phoneEmailWidth = font.widthOfTextAtSize(phoneEmailLine, valueFontSize);
-      page.drawText(addressLine, { x: (595.28 - addressWidth) / 2, y, size: valueFontSize, font });
-      y -= valueFontSize + 2;
-      page.drawText(gstinLine, { x: (595.28 - gstinWidth) / 2, y, size: valueFontSize, font });
-      y -= valueFontSize + 2;
-      page.drawText(phoneEmailLine, { x: (595.28 - phoneEmailWidth) / 2, y, size: valueFontSize, font });
-      y -= 10;
-      // Draw a line
-      page.drawLine({ start: { x: leftMargin, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
-      y -= 24; // Increase the gap for more space
-      // Invoice number (left), date below (left)
-      page.drawText(`Invoice No: ${invoice.invoice_no}`, { x: leftMargin, y, size: labelFontSize, font });
-      y -= labelFontSize + 2;
-      const formattedDate = invoice.bill_date.includes('-') && invoice.bill_date.length === 10
-        ? invoice.bill_date.split('-').reverse().join('-')
-        : invoice.bill_date;
-      page.drawText(`Date: ${formattedDate}`, { x: leftMargin, y, size: labelFontSize, font });
-      y -= sectionSpacing;
-      // Bill To (bold)
-      page.drawText('Bill To:', { x: leftMargin, y, size: subheadingFontSize, font: fontBold });
-      y -= subheadingFontSize + 2;
-      // Client name (bold)
-      page.drawText(`${client?.name || ''}`, { x: leftMargin + 20, y, size: valueFontSize, font: fontBold });
-      y -= valueFontSize + 2;
-      // Client address (regular)
-      page.drawText(`${client?.address || ''}`, { x: leftMargin + 20, y, size: valueFontSize, font });
-      y -= 28; // Add +4 to previous spacing for more gap
-      // Table (centered, with lines)
-      const pageWidth = 595.28;
-      const margin = 40;
-      const tableWidth = pageWidth - margin * 2;
-      const tableStartX = margin;
-      const colWidths = [tableWidth * 0.16, tableWidth * 0.16, tableWidth * 0.28, tableWidth * 0.12, tableWidth * 0.14, tableWidth * 0.14];
-      const headers = ['PO No', 'PO Date', 'Description', 'Qty', 'Rate', 'Amount'];
-      let colX = tableStartX;
-      const cellPadding = 10;
-      // Table header background
-      page.drawRectangle({ x: tableStartX, y: y - 4, width: tableWidth, height: 20, color: rgb(0.92,0.92,0.92) });
-      // Table header
-      headers.forEach((header, i) => {
-        const colCenter = colX + colWidths[i] / 2;
-        const textWidth = fontBold.widthOfTextAtSize(header, 12);
-        page.drawText(header, { x: colCenter - textWidth / 2, y: y + 2, size: 12, font: fontBold });
-        colX += colWidths[i];
-      });
-      y -= 20;
-      // Table rows with lines
-      items.forEach((item: any, idx: number) => {
-        colX = tableStartX;
-        const rowY = y;
-        page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
-        // Center align all columns with padding
-        const values = [item.po_no || '', item.po_date || '', item.description, String(item.quantity), String(item.unit_price), String(item.amount)];
-        values.forEach((val, i) => {
-          const colStart = colX + cellPadding;
-          const colEnd = colX + colWidths[i] - cellPadding;
-          const colCenter = (colStart + colEnd) / 2;
-          const textWidth = font.widthOfTextAtSize(val, 12);
-          page.drawText(val, { x: colCenter - textWidth / 2, y: rowY + 2, size: 12, font });
-          colX += colWidths[i];
-        });
-        y -= 18;
-      });
-      // Table border
-      page.drawRectangle({ x: tableStartX, y: y + 18, width: tableWidth, height: (items.length + 1) * 18, borderColor: rgb(0.7,0.7,0.7), borderWidth: 1, color: rgb(1,1,1), opacity: 0 });
-      y -= 10;
-      // Totals (left-aligned)
-      const labelWidth = font.widthOfTextAtSize('SGST:', valueFontSize);
-      // Add total quantity above base amount in totals section
-      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-      let totalY = y;
-      page.drawText('Total Quantity:', { x: leftMargin, y: totalY, size: valueFontSize, font });
-      page.drawText(String(totalQuantity), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font });
-      totalY -= valueFontSize + 6;
-      const totalLines = [
-        { label: 'Base:', value: invoice.base_amount },
-        { label: 'CGST:', value: invoice.cgst },
-        { label: 'SGST:', value: invoice.sgst },
+      // Prepare table body with new columns
+      const tableBody = [
+        [
+          { text: 'Sl No.', style: 'tableHeader' },
+          { text: 'PO No.', style: 'tableHeader' },
+          { text: 'PO Date', style: 'tableHeader' },
+          { text: 'Description', style: 'tableHeader' },
+          { text: 'HSN', style: 'tableHeader' },
+          { text: 'Quantity', style: 'tableHeader' },
+          { text: 'Rate', style: 'tableHeader' },
+          { text: 'Amount', style: 'tableHeader' },
+        ],
+        ...items.map((item, idx) => [
+          idx + 1,
+          item.po_no || '',
+          item.po_date || '',
+          item.description || '',
+          item.hsn || '',
+          item.quantity ?? '',
+          item.unit_price ?? '',
+          round2(item.amount ?? 0).toFixed(2),
+        ]),
       ];
-      totalLines.forEach(line => {
-        page.drawText(line.label, { x: leftMargin, y: totalY, size: valueFontSize, font });
-        page.drawText('INR', { x: leftMargin + labelWidth + 8, y: totalY, size: valueFontSize, font });
-        page.drawText(String(line.value), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font });
-        totalY -= valueFontSize + 6;
-      });
-      page.drawText('Total:', { x: leftMargin, y: totalY, size: valueFontSize, font: fontBold });
-      page.drawText('INR', { x: leftMargin + labelWidth + 8, y: totalY, size: valueFontSize, font: fontBold });
-      page.drawText(String(invoice.total_amount), { x: leftMargin + labelWidth + 40, y: totalY, size: valueFontSize, font: fontBold });
-      y = totalY - sectionSpacing;
-      // Amount in words (centered, fixed)
-      const amountWords = convertToWords(Math.round(invoice.total_amount));
-      const amountWordsText = `Amount in Words: ${amountWords} Rupees Only`;
-      const amountWordsWidth = font.widthOfTextAtSize(amountWordsText, valueFontSize);
-      page.drawText(amountWordsText, { x: (pageWidth - amountWordsWidth) / 2, y, size: valueFontSize, font });
-      // After drawing amount in words
-      const leftSectionY = y - 40;
-      const rightSectionY = y - 40;
-      // Left: Received Goods, Receiver Sign, Vehicle Number
-      page.drawText('Received Goods in Good Condition', { x: leftMargin, y: leftSectionY, size: valueFontSize, font });
-      page.drawText('Receiver Sign', { x: leftMargin, y: leftSectionY - 20, size: valueFontSize, font });
-      page.drawText('Vehicle Number', { x: leftMargin, y: leftSectionY - 40, size: valueFontSize, font });
-      // Right: For <Company Name> and Authorised Signatory, center-aligned to each other
-      const forCompanyText = `For ${company.company_name}`;
-      const authorisedText = 'Authorised Signatory';
-      const rightBlockWidth = Math.max(
-        fontBold.widthOfTextAtSize(forCompanyText, valueFontSize),
-        font.widthOfTextAtSize(authorisedText, valueFontSize)
-      );
-      const rightBlockX = 595.28 - leftMargin - rightBlockWidth;
-      page.drawText(forCompanyText, { x: rightBlockX + (rightBlockWidth - fontBold.widthOfTextAtSize(forCompanyText, valueFontSize)) / 2, y: rightSectionY, size: valueFontSize, font: fontBold });
-      page.drawText(authorisedText, { x: rightBlockX + (rightBlockWidth - font.widthOfTextAtSize(authorisedText, valueFontSize)) / 2, y: rightSectionY - 20, size: valueFontSize, font });
-      // Save PDF
-      const pdfBytes = await pdfDoc.save();
-      const fileName = `${invoice.invoice_no}.pdf`;
-      const exportPath = settings.export_folder_path ? `${settings.export_folder_path}/${fileName}` : fileName;
-      if (window.electronAPI) {
-        await window.electronAPI.exportDatabase(pdfBytes, exportPath);
+      // Calculate totals
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+      const baseAmount = round2(invoice.base_amount).toFixed(2);
+      const cgst = round2(invoice.cgst).toFixed(2);
+      const sgst = round2(invoice.sgst).toFixed(2);
+      const grandTotal = round2(invoice.total_amount).toFixed(2);
+      // Prepare document definition
+      const docDefinition = {
+        content: [
+          { text: company.company_name, style: 'header' },
+          { text: company.address, style: 'subheader' },
+          { text: `GSTIN: ${company.gstin} | Phone: ${company.phone} | Email: ${company.email}`, style: 'subheader' },
+          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
+          { text: 'INVOICE', style: 'invoiceTitle' },
+          { text: `Invoice No: ${invoice.invoice_no}`, style: 'details' },
+          { text: `Date: ${formatDateDDMMYYYY(invoice.bill_date)}`, style: 'details' },
+          { text: `Client: ${client?.name || ''}`, style: 'details' },
+          { text: `Client GSTIN: ${client?.gstin || ''}`, style: 'details' },
+          { text: `Client Address: ${client?.address || ''}`, style: 'details' },
+          { text: '\n' },
+          {
+            table: {
+              headerRows: 1,
+              widths: [30, 60, 60, '*', 50, 60, 45, 60],
+              body: tableBody,
+            },
+            layout: {
+              fillColor: (rowIndex) => (rowIndex === 0 ? '#e3e8f0' : rowIndex % 2 === 0 ? '#f8fafc' : null),
+              hLineColor: () => '#d1d5db',
+              vLineColor: () => '#d1d5db',
+              hLineWidth: () => 0.7,
+              vLineWidth: () => 0.7,
+              paddingTop: () => 6,
+              paddingBottom: () => 6,
+              paddingLeft: () => 4,
+              paddingRight: () => 4,
+            },
+          },
+          { text: '\n' },
+          {
+            columns: [
+              { width: '*', text: '' },
+              {
+                width: 'auto',
+                table: {
+                  body: [
+                    ['Total Quantity', totalQuantity],
+                    ['Base Amount', `₹${baseAmount}`],
+                    ['CGST', `₹${cgst}`],
+                    ['SGST', `₹${sgst}`],
+                    [{ text: 'Grand Total', bold: true, fontSize: 12 }, { text: `₹${grandTotal}`, bold: true, fontSize: 12 }],
+                  ],
+                },
+                layout: {
+                  fillColor: (rowIndex) => rowIndex === 4 ? '#f1f5f9' : '#f8fafc',
+                  hLineColor: () => '#d1d5db',
+                  vLineColor: () => '#d1d5db',
+                  hLineWidth: () => 0.7,
+                  vLineWidth: () => 0.7,
+                  paddingTop: () => 5,
+                  paddingBottom: () => 5,
+                  paddingLeft: () => 4,
+                  paddingRight: () => 4,
+                },
+              },
+            ],
+            columnGap: 10,
+          },
+          { text: '\n' },
+          { text: `Amount in words: ${convertToWordsWithPaise(invoice.total_amount)} Only`, style: 'amountWords' },
+          { text: '\n' },
+          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
+          {
+            columns: [
+              {
+                width: '50%',
+                stack: [
+                  { text: 'Received goods in good condition', margin: [0, 0, 0, 8], style: 'footerNote' },
+                  { text: 'Receiver sign', margin: [0, 0, 0, 8], style: 'footerNote' },
+                  { text: 'Vehicle number: __________', margin: [0, 0, 0, 8], style: 'footerNote' },
+                ],
+                alignment: 'left',
+              },
+              {
+                width: '50%',
+                stack: [
+                  { text: `For ${company.company_name}`, alignment: 'right', margin: [0, 0, 0, 8], style: 'footerNote' },
+                  { text: 'Authorised signature', alignment: 'right', margin: [0, 0, 0, 8], style: 'footerNote' },
+                ],
+                alignment: 'right',
+              },
+            ],
+            columnGap: 10,
+          },
+        ],
+        styles: {
+          header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
+          subheader: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
+          invoiceTitle: { fontSize: 15, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
+          details: { fontSize: 10, margin: [0, 0, 0, 2], color: '#334155' },
+          tableHeader: { bold: true, fontSize: 12, color: '#0f172a', fillColor: '#e3e8f0' },
+          totals: { fontSize: 11, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
+          amountWords: { fontSize: 10, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
+          footerNote: { fontSize: 9, color: '#64748b' },
+        },
+        defaultStyle: { fontSize: 10 },
+        pageSize: 'A4',
+        pageMargins: [30, 40, 30, 40],
+      };
+
+      // Generate PDF and save (Electron or browser)
+      if (window.electronAPI && window.electronAPI.exportDatabase) {
+        if (!settings.export_folder_path) {
+          toast({ title: 'Export Folder Not Set', description: 'Please set the export folder in settings before exporting PDF.', variant: 'destructive' });
+          setPdfExportLoadingId(null);
+          return;
+        }
+        const exportPath = `${settings.export_folder_path}/${invoice.invoice_no}.pdf`;
+        pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+          window.electronAPI.exportDatabase(buffer, exportPath);
+          toast({ title: 'PDF Exported', description: `PDF saved to: ${exportPath}`, variant: 'default' });
+        });
       } else {
-        // Web: download
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        pdfMake.createPdf(docDefinition).download(`${invoice.invoice_no}.pdf`);
+        toast({ title: 'PDF Exported', description: 'PDF export successful!', variant: 'default' });
       }
-      toast({ title: 'PDF Exported', description: 'PDF export successful!', variant: 'default' });
     } catch (err) {
       toast({ title: 'PDF Export Error', description: String(err), variant: 'destructive' });
     } finally {
       setPdfExportLoadingId(null);
     }
   };
+
+  // Add this helper function below convertToWords
+  function convertToWordsWithPaise(amount: number): string {
+    const rupees = Math.floor(amount);
+    const paise = Math.round((amount - rupees) * 100);
+    let words = convertToWords(rupees) + ' Rupees';
+    if (paise > 0) {
+      words += ' and ' + convertToWords(paise) + ' Paise';
+    }
+    return words;
+  }
+
+  function formatDateDDMMYYYY(dateStr: string) {
+    if (!dateStr) return '';
+    if (dateStr.includes('-') && dateStr.length === 10) {
+      const parts = dateStr.split('-');
+      if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`; // yyyy-MM-dd -> dd-MM-yyyy
+      if (parts[2].length === 4) return dateStr; // already dd-MM-yyyy
+    }
+    return dateStr;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">

@@ -6,7 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, FileDown, Calendar } from 'lucide-react';
 import { useDatabaseStore } from '@/store/databaseStore';
 import { format } from 'date-fns';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import pdfMake from 'pdfmake/build/pdfmake';
+import vfsFonts from 'pdfmake/build/vfs_fonts';
+pdfMake.vfs = vfsFonts.vfs;
 import { toast } from '@/components/ui/use-toast';
 
 interface MonthlyStatementProps {
@@ -34,10 +36,17 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
 
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const invoiceDate = new Date(invoice.bill_date);
-    return invoiceDate.getMonth() === selectedMonth && invoiceDate.getFullYear() === selectedYear;
-  });
+  const filteredInvoices = invoices
+    .filter(invoice => {
+      const invoiceDate = new Date(invoice.bill_date);
+      return invoiceDate.getMonth() === selectedMonth && invoiceDate.getFullYear() === selectedYear;
+    })
+    .sort((a, b) => {
+      // Extract numeric part for comparison
+      const numA = parseInt(a.invoice_no.replace(/\D/g, ''));
+      const numB = parseInt(b.invoice_no.replace(/\D/g, ''));
+      return numA - numB;
+    });
 
   const totalStats = {
     baseAmount: filteredInvoices.reduce((sum, inv) => sum + inv.base_amount, 0),
@@ -50,115 +59,125 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
     setPdfExportLoading(true);
     try {
       const company = settings;
-      // Create PDF
-      const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size in points
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      let y = 800;
-      // Company name (centered, bold)
-      const companyNameWidth = fontBold.widthOfTextAtSize(company.company_name, 22);
-      page.drawText(company.company_name, { x: (595.28 - companyNameWidth) / 2, y, size: 22, font: fontBold });
-      y -= 28;
-      // Address, GSTIN, Phone, Email (centered)
-      const addressLine = company.address;
-      const gstinLine = `GSTIN: ${company.gstin}`;
-      const phoneEmailLine = `Phone: ${company.phone}  Email: ${company.email}`;
-      const addressWidth = font.widthOfTextAtSize(addressLine, 12);
-      const gstinWidth = font.widthOfTextAtSize(gstinLine, 12);
-      const phoneEmailWidth = font.widthOfTextAtSize(phoneEmailLine, 12);
-      page.drawText(addressLine, { x: (595.28 - addressWidth) / 2, y, size: 12, font });
-      y -= 16;
-      page.drawText(gstinLine, { x: (595.28 - gstinWidth) / 2, y, size: 12, font });
-      y -= 16;
-      page.drawText(phoneEmailLine, { x: (595.28 - phoneEmailWidth) / 2, y, size: 12, font });
-      y -= 24;
-      // Draw a line
-      page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
-      y -= 18;
-      // Statement title
-      page.drawText(`Monthly Statement: ${months[selectedMonth]} ${selectedYear}`, { x: 50, y, size: 14, font: fontBold });
-      y -= 24;
-      // Table (centered, with lines)
-      const pageWidth = 595.28;
-      const margin = 40;
-      const tableWidth = pageWidth - margin * 2;
-      const tableStartX = margin;
-      const colWidths = [tableWidth * 0.16, tableWidth * 0.13, tableWidth * 0.18, tableWidth * 0.13, tableWidth * 0.13, tableWidth * 0.13, tableWidth * 0.14];
-      const headers = ['Invoice No', 'Date', 'Client', 'Base', 'CGST', 'SGST', 'Total'];
-      let colX = tableStartX;
-      // Table header background
-      page.drawRectangle({ x: tableStartX, y: y - 4, width: tableWidth, height: 20, color: rgb(0.93,0.95,1) });
-      // Table header
-      headers.forEach((header, i) => {
-        const colCenter = colX + colWidths[i] / 2;
-        const textWidth = fontBold.widthOfTextAtSize(header, 12);
-        page.drawText(header, { x: colCenter - textWidth / 2, y: y + 3, size: 12, font: fontBold });
-        colX += colWidths[i];
-      });
-      y -= 20;
-      // Table rows with lines
-      filteredInvoices.forEach((inv: any, idx: number) => {
-        colX = tableStartX;
-        const rowY = y;
-        page.drawRectangle({ x: tableStartX, y: rowY - 2, width: tableWidth, height: 18, color: idx % 2 === 0 ? rgb(1,1,1) : rgb(0.97,0.98,1), opacity: idx % 2 === 0 ? 0 : 1 });
-        // Format date as dd-mm-yyyy
-        const formattedDate = inv.bill_date && inv.bill_date.includes('-') && inv.bill_date.length === 10
-          ? (() => { const d = inv.bill_date.split('-'); return `${d[2]}-${d[1]}-${d[0]}`; })()
-          : inv.bill_date;
-        // Remove INR from table cells, only show numbers
-        const values = [inv.invoice_no, formattedDate, inv.company_name, inv.base_amount, inv.cgst, inv.sgst, inv.total_amount];
-        values.forEach((val, i) => {
-          const colCenter = colX + colWidths[i] / 2;
-          const textWidth = font.widthOfTextAtSize(String(val), 12);
-          page.drawText(String(val), { x: colCenter - textWidth / 2, y: rowY + 2, size: 12, font });
-          colX += colWidths[i];
-        });
-        y -= 18;
-      });
-      // Table border
-      page.drawRectangle({ x: tableStartX, y: y + 18, width: tableWidth, height: (filteredInvoices.length + 1) * 18, borderColor: rgb(0.7,0.7,0.7), borderWidth: 1, color: rgb(1,1,1), opacity: 0 });
-      y -= 24;
-      // Totals section
-      page.drawLine({ start: { x: tableStartX, y }, end: { x: tableStartX + tableWidth, y }, thickness: 1, color: rgb(0.7,0.7,0.7) });
-      y -= 18;
-      const totalsFontSize = 13;
-      const totals = [
-        { label: 'Total Base', value: `INR ${totalStats.baseAmount.toLocaleString('en-IN')}` },
-        { label: 'CGST', value: `INR ${totalStats.cgst.toLocaleString('en-IN')}` },
-        { label: 'SGST', value: `INR ${totalStats.sgst.toLocaleString('en-IN')}` },
-        { label: 'Total Amount', value: `INR ${totalStats.totalAmount.toLocaleString('en-IN')}` },
+      // Prepare table body
+      const tableBody = [
+        [
+          { text: 'Sl No', style: 'tableHeader' },
+          { text: 'Invoice No', style: 'tableHeader' },
+          { text: 'Date', style: 'tableHeader' },
+          { text: 'Client', style: 'tableHeader' },
+          { text: 'Amount', style: 'tableHeader' },
+          { text: 'CGST', style: 'tableHeader' },
+          { text: 'SGST', style: 'tableHeader' },
+          { text: 'Total', style: 'tableHeader' },
+        ],
+        ...filteredInvoices.map((item, idx) => [
+          idx + 1,
+          item.invoice_no || '',
+          format(new Date(item.bill_date), 'dd MMM yyyy') || '',
+          item.company_name || '',
+          item.base_amount?.toLocaleString('en-IN') ?? '',
+          item.cgst?.toLocaleString('en-IN') ?? '',
+          item.sgst?.toLocaleString('en-IN') ?? '',
+          item.total_amount?.toLocaleString('en-IN') ?? '',
+        ]),
       ];
-      totals.forEach((row, i) => {
-        const labelWidth = fontBold.widthOfTextAtSize(row.label, totalsFontSize);
-        const valueWidth = font.widthOfTextAtSize(row.value, totalsFontSize);
-        const labelX = tableStartX + tableWidth - 220;
-        const valueX = tableStartX + tableWidth - valueWidth - 10;
-        page.drawText(row.label, { x: labelX, y: y, size: totalsFontSize, font: fontBold });
-        page.drawText(row.value, { x: valueX, y: y, size: totalsFontSize, font });
-        y -= 18;
-      });
-      // Save PDF
-      const pdfBytes = await pdfDoc.save();
-      const fileName = `Monthly-Statement-${months[selectedMonth]}-${selectedYear}.pdf`;
-      const statementsFolder = settings.export_folder_path ? `${settings.export_folder_path}/Statements` : 'Statements';
-      const exportPath = `${statementsFolder}/${fileName}`;
-      if (window.electronAPI) {
-        await window.electronAPI.exportDatabase(pdfBytes, exportPath);
-        toast({ title: 'PDF exported successfully!', description: `Saved to: ${exportPath}` });
+
+      // Prepare document definition with professional invoice styling
+      const docDefinition = {
+        content: [
+          { text: company.company_name, style: 'header' },
+          { text: company.address, style: 'subheader' },
+          { text: `GSTIN: ${company.gstin} | Phone: ${company.phone} | Email: ${company.email}`, style: 'subheader' },
+          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
+          { text: 'MONTHLY STATEMENT', style: 'invoiceTitle' },
+          { text: `Month: ${months[selectedMonth]}`, style: 'details' },
+          { text: `Year: ${selectedYear}`, style: 'details' },
+          { text: '\n' },
+          {
+            table: {
+              headerRows: 1,
+              widths: [30, 60, 50, '*', 60, 45, 45, 60],
+              body: tableBody,
+            },
+            layout: {
+              fillColor: (rowIndex) => (rowIndex === 0 ? '#e3e8f0' : rowIndex % 2 === 0 ? '#f8fafc' : null),
+              hLineColor: () => '#d1d5db',
+              vLineColor: () => '#d1d5db',
+              hLineWidth: () => 0.7,
+              vLineWidth: () => 0.7,
+              paddingTop: () => 6,
+              paddingBottom: () => 6,
+              paddingLeft: () => 4,
+              paddingRight: () => 4,
+            },
+          },
+          { text: '\n' },
+          {
+            columns: [
+              { width: '*', text: '' },
+              {
+                width: 'auto',
+                table: {
+                  body: [
+                    ['Base Amount', `₹${totalStats.baseAmount.toLocaleString('en-IN')}`],
+                    ['CGST', `₹${totalStats.cgst.toLocaleString('en-IN')}`],
+                    ['SGST', `₹${totalStats.sgst.toLocaleString('en-IN')}`],
+                    [{ text: 'Grand Total', bold: true, fontSize: 12 }, { text: `₹${totalStats.totalAmount.toLocaleString('en-IN')}`, bold: true, fontSize: 12 }],
+                  ],
+                },
+                layout: {
+                  fillColor: (rowIndex) => rowIndex === 3 ? '#f1f5f9' : '#f8fafc',
+                  hLineColor: () => '#d1d5db',
+                  vLineColor: () => '#d1d5db',
+                  hLineWidth: () => 0.7,
+                  vLineWidth: () => 0.7,
+                  paddingTop: () => 5,
+                  paddingBottom: () => 5,
+                  paddingLeft: () => 4,
+                  paddingRight: () => 4,
+                },
+              },
+            ],
+            columnGap: 10,
+          },
+          { text: '\n' },
+          { text: `Amount in words: ${convertToWordsWithPaise(totalStats.totalAmount)} Only`, style: 'amountWords' },
+          { text: '\n' },
+          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
+        ],
+        styles: {
+          header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
+          subheader: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
+          invoiceTitle: { fontSize: 15, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
+          details: { fontSize: 10, margin: [0, 0, 0, 2], color: '#334155' },
+          tableHeader: { bold: true, fontSize: 12, color: '#0f172a', fillColor: '#e3e8f0' },
+          totals: { fontSize: 11, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
+          amountWords: { fontSize: 10, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
+        },
+        defaultStyle: { fontSize: 10 },
+        pageSize: 'A4',
+        pageMargins: [30, 40, 30, 40],
+      };
+
+      // Generate PDF and save (Electron or browser)
+      if (window.electronAPI && window.electronAPI.exportDatabase) {
+        if (!settings.export_folder_path) {
+          toast({ title: 'Export Folder Not Set', description: 'Please set the export folder in settings before exporting PDF.', variant: 'destructive' });
+          setPdfExportLoading(false);
+          return;
+        }
+        const exportPath = `${settings.export_folder_path}/statements/MonthlyStatement-${months[selectedMonth]}-${selectedYear}.pdf`;
+        pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+          window.electronAPI.exportDatabase(buffer, exportPath);
+          toast({ title: 'PDF exported successfully!', description: `Saved to: ${exportPath}` });
+          setPdfExportLoading(false);
+        });
       } else {
-        // Web: download
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        pdfMake.createPdf(docDefinition).download(`MonthlyStatement-${months[selectedMonth]}-${selectedYear}.pdf`);
+        toast({ title: 'PDF exported successfully!', description: `Saved to: MonthlyStatement-${months[selectedMonth]}-${selectedYear}.pdf` });
+        setPdfExportLoading(false);
       }
-      setPdfExportLoading(false);
     } catch (err) {
       setPdfExportLoading(false);
     }
@@ -354,3 +373,29 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
 };
 
 export default MonthlyStatement;
+
+function convertToWords(num: number): string {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  if (num === 0) return 'Zero';
+  let result = '';
+  if (num >= 10000000) { result += convertToWords(Math.floor(num / 10000000)) + ' Crore '; num %= 10000000; }
+  if (num >= 100000) { result += convertToWords(Math.floor(num / 100000)) + ' Lakh '; num %= 100000; }
+  if (num >= 1000) { result += convertToWords(Math.floor(num / 1000)) + ' Thousand '; num %= 1000; }
+  if (num >= 100) { result += ones[Math.floor(num / 100)] + ' Hundred '; num %= 100; }
+  if (num >= 20) { result += tens[Math.floor(num / 10)] + ' '; num %= 10; }
+  else if (num >= 10) { result += teens[num - 10] + ' '; return result.trim(); }
+  if (num > 0) { result += ones[num] + ' '; }
+  return result.trim();
+}
+
+function convertToWordsWithPaise(amount: number): string {
+  const rupees = Math.floor(amount);
+  const paise = Math.round((amount - rupees) * 100);
+  let words = convertToWords(rupees) + ' Rupees';
+  if (paise > 0) {
+    words += ' and ' + convertToWords(paise) + ' Paise';
+  }
+  return words;
+}

@@ -13,5 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeDatabaseFile: async (data) => {
     return await ipcRenderer.invoke('write-database-file', { data });
   },
-  getSqlWasmPath: async () => await ipcRenderer.invoke('get-sql-wasm-path')
+  getSqlWasmPath: async () => await ipcRenderer.invoke('get-sql-wasm-path'),
+  on: (channel, listener) => {
+    ipcRenderer.on(channel, listener);
+  }
 }); 
