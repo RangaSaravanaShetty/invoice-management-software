@@ -129,7 +129,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           { text: 'PO Date', style: 'tableHeader' },
           { text: 'Description', style: 'tableHeader' },
           { text: 'HSN', style: 'tableHeader' },
-          { text: 'Quantity', style: 'tableHeader' },
+          { text: 'Qty', style: 'tableHeader' },
           { text: 'Rate', style: 'tableHeader' },
           { text: 'Amount', style: 'tableHeader' },
         ],
@@ -159,7 +159,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
           { text: 'INVOICE', style: 'invoiceTitle' },
           { text: `Invoice No: ${invoice.invoice_no}`, style: 'details' },
-          { text: `Date: ${formatDateDDMMYYYY(invoice.bill_date)}`, style: 'details' },
+          { text: `Date: ${new Date(invoice.bill_date).toLocaleDateString()}`, style: 'details' },
           { text: `Client: ${client?.name || ''}`, style: 'details' },
           { text: `Client GSTIN: ${client?.gstin || ''}`, style: 'details' },
           { text: `Client Address: ${client?.address || ''}`, style: 'details' },
@@ -167,7 +167,8 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           {
             table: {
               headerRows: 1,
-              widths: [30, 60, 60, '*', 50, 60, 45, 60],
+              // Column widths: [Sl No, PO No, PO Date, Description, HSN, Quantity, Rate, Amount]
+              widths: [24, 48, 48, '*', 40, 20, 36, 48],
               body: tableBody,
             },
             layout: {
@@ -184,33 +185,24 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           },
           { text: '\n' },
           {
-            columns: [
-              { width: '*', text: '' },
-              {
-                width: 'auto',
-                table: {
-                  body: [
-                    ['Total Quantity', totalQuantity],
-                    ['Base Amount', `₹${baseAmount}`],
-                    ['CGST', `₹${cgst}`],
-                    ['SGST', `₹${sgst}`],
-                    [{ text: 'Grand Total', bold: true, fontSize: 12 }, { text: `₹${grandTotal}`, bold: true, fontSize: 12 }],
-                  ],
-                },
-                layout: {
-                  fillColor: (rowIndex) => rowIndex === 4 ? '#f1f5f9' : '#f8fafc',
-                  hLineColor: () => '#d1d5db',
-                  vLineColor: () => '#d1d5db',
-                  hLineWidth: () => 0.7,
-                  vLineWidth: () => 0.7,
-                  paddingTop: () => 5,
-                  paddingBottom: () => 5,
-                  paddingLeft: () => 4,
-                  paddingRight: () => 4,
-                },
-              },
+            text: [
+              { text: 'Total Quantity: ', bold: true, fontSize: 9 },
+              { text: `${totalQuantity}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'Base Amount: ', bold: true, fontSize: 9 },
+              { text: `₹${baseAmount}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'CGST: ', bold: true, fontSize: 9 },
+              { text: `₹${cgst}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'SGST: ', bold: true, fontSize: 9 },
+              { text: `₹${sgst}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'Grand Total: ', bold: true, fontSize: 10, color: '#0f172a' },
+              { text: `₹${grandTotal}`, fontSize: 10, bold: true, color: '#0f172a' },
             ],
-            columnGap: 10,
+            alignment: 'left',
+            margin: [0, 10, 0, 10],
           },
           { text: '\n' },
           { text: `Amount in words: ${convertToWordsWithPaise(invoice.total_amount)} Only`, style: 'amountWords' },
@@ -240,16 +232,16 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           },
         ],
         styles: {
-          header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
-          subheader: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
-          invoiceTitle: { fontSize: 15, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
-          details: { fontSize: 10, margin: [0, 0, 0, 2], color: '#334155' },
-          tableHeader: { bold: true, fontSize: 12, color: '#0f172a', fillColor: '#e3e8f0' },
-          totals: { fontSize: 11, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
-          amountWords: { fontSize: 10, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
-          footerNote: { fontSize: 9, color: '#64748b' },
+          header: { fontSize: 18, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
+          subheader: { fontSize: 9, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
+          invoiceTitle: { fontSize: 12, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
+          details: { fontSize: 8, margin: [0, 0, 0, 2], color: '#334155' },
+          tableHeader: { bold: true, fontSize: 10, color: '#0f172a', fillColor: '#e3e8f0', alignment: 'center' },
+          totals: { fontSize: 9, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
+          amountWords: { fontSize: 8, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
+          footerNote: { fontSize: 7, color: '#64748b' },
         },
-        defaultStyle: { fontSize: 10 },
+        defaultStyle: { fontSize: 8 },
         pageSize: 'A4',
         pageMargins: [30, 40, 30, 40],
       };
@@ -361,7 +353,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                       <TableRow key={invoice.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium">{invoice.invoice_no}</TableCell>
                         <TableCell>
-                          {(() => { const d = invoice.bill_date.split('-'); return `${d[2]}-${d[1]}-${d[0]}`; })()}
+                          {new Date(invoice.bill_date).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-slate-600">{invoice.company_name}</TableCell>
                         <TableCell className="text-right">

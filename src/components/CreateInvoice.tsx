@@ -142,7 +142,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           { text: 'PO Date', style: 'tableHeader' },
           { text: 'Description', style: 'tableHeader' },
           { text: 'HSN', style: 'tableHeader' },
-          { text: 'Quantity', style: 'tableHeader' },
+          { text: 'Qty', style: 'tableHeader' },
           { text: 'Rate', style: 'tableHeader' },
           { text: 'Amount', style: 'tableHeader' },
         ],
@@ -172,7 +172,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
           { text: 'INVOICE', style: 'invoiceTitle' },
           { text: `Invoice No: ${invoiceNo}`, style: 'details' },
-          { text: `Date: ${billDate}`, style: 'details' },
+          { text: `Date: ${new Date(billDate).toLocaleDateString()}`, style: 'details' },
           { text: `Client: ${clients.find(c => c.id === clientId)?.name || ''}`, style: 'details' },
           { text: `Client GSTIN: ${clients.find(c => c.id === clientId)?.gstin || ''}`, style: 'details' },
           { text: `Client Address: ${clients.find(c => c.id === clientId)?.address || ''}`, style: 'details' },
@@ -180,7 +180,8 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           {
             table: {
               headerRows: 1,
-              widths: [30, 60, 60, '*', 50, 60, 45, 60],
+              // Column widths: [Sl No, PO No, PO Date, Description, HSN, Quantity, Rate, Amount]
+              widths: [24, 48, 48, '*', 40, 20, 36, 48],
               body: tableBody,
             },
             layout: {
@@ -197,33 +198,24 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           },
           { text: '\n' },
           {
-            columns: [
-              { width: '*', text: '' },
-              {
-                width: 'auto',
-                table: {
-                  body: [
-                    ['Total Quantity', totalQuantity],
-                    ['Base Amount', `₹${baseAmount}`],
-                    ['CGST', `₹${cgst}`],
-                    ['SGST', `₹${sgst}`],
-                    [{ text: 'Grand Total', bold: true, fontSize: 12 }, { text: `₹${grandTotal}`, bold: true, fontSize: 12 }],
-                  ],
-                },
-                layout: {
-                  fillColor: (rowIndex) => rowIndex === 4 ? '#f1f5f9' : '#f8fafc',
-                  hLineColor: () => '#d1d5db',
-                  vLineColor: () => '#d1d5db',
-                  hLineWidth: () => 0.7,
-                  vLineWidth: () => 0.7,
-                  paddingTop: () => 5,
-                  paddingBottom: () => 5,
-                  paddingLeft: () => 4,
-                  paddingRight: () => 4,
-                },
-              },
+            text: [
+              { text: 'Total Quantity: ', bold: true, fontSize: 9 },
+              { text: `${totalQuantity}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'Base Amount: ', bold: true, fontSize: 9 },
+              { text: `₹${baseAmount}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'CGST: ', bold: true, fontSize: 9 },
+              { text: `₹${cgst}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'SGST: ', bold: true, fontSize: 9 },
+              { text: `₹${sgst}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'Grand Total: ', bold: true, fontSize: 10, color: '#0f172a' },
+              { text: `₹${grandTotal}`, fontSize: 10, bold: true, color: '#0f172a' },
             ],
-            columnGap: 10,
+            alignment: 'left',
+            margin: [0, 10, 0, 10],
           },
           { text: '\n' },
           { text: `Amount in words: ${convertToWordsWithPaise(getTotalAmount())} Only`, style: 'amountWords' },
@@ -253,16 +245,16 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           },
         ],
         styles: {
-          header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
-          subheader: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
-          invoiceTitle: { fontSize: 15, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
-          details: { fontSize: 10, margin: [0, 0, 0, 2], color: '#334155' },
-          tableHeader: { bold: true, fontSize: 12, color: '#0f172a', fillColor: '#e3e8f0' },
-          totals: { fontSize: 11, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
-          amountWords: { fontSize: 10, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
-          footerNote: { fontSize: 9, color: '#64748b' },
+          header: { fontSize: 18, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
+          subheader: { fontSize: 9, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
+          invoiceTitle: { fontSize: 12, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
+          details: { fontSize: 8, margin: [0, 0, 0, 2], color: '#334155' },
+          tableHeader: { bold: true, fontSize: 10, color: '#0f172a', fillColor: '#e3e8f0', alignment: 'center' },
+          totals: { fontSize: 9, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
+          amountWords: { fontSize: 8, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
+          footerNote: { fontSize: 7, color: '#64748b' },
         },
-        defaultStyle: { fontSize: 10 },
+        defaultStyle: { fontSize: 8 },
         pageSize: 'A4',
         pageMargins: [30, 40, 30, 40],
       };
@@ -460,7 +452,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                 <CardTitle className="text-lg text-slate-800">Line Items</CardTitle>
                 <Popover open={searchOpen} onOpenChange={setSearchOpen}>
                   <PopoverTrigger asChild>
-                    <Button className="bg-gradient-to-r from-blue-500 to-purple-600" disabled={items.length >= 5}>
+                    <Button className="bg-gradient-to-r from-blue-500 to-purple-600" disabled={items.length >= 10}>
                       <Search className="h-4 w-4 mr-2" />
                       Add Item
                     </Button>
@@ -509,13 +501,13 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Description</TableHead>
-                          <TableHead>HSN</TableHead>
-                          <TableHead>PO No</TableHead>
-                          <TableHead>PO Date</TableHead>
-                          <TableHead>Qty</TableHead>
-                          <TableHead>Rate</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead></TableHead>
+                          <TableHead className="text-center">HSN</TableHead>
+                          <TableHead className="text-center">PO No</TableHead>
+                          <TableHead className="text-center">PO Date</TableHead>
+                          <TableHead className="text-center">Qty</TableHead>
+                          <TableHead className="text-center">Rate</TableHead>
+                          <TableHead className="text-center">Amount</TableHead>
+                          <TableHead className="text-center"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -524,41 +516,41 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                             <TableCell className="font-medium">
                               {item.description}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center">
                               {item.hsn}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center">
                               <Input
                                 value={item.po_no}
                                 onChange={(e) => handleItemChange(index, 'po_no', e.target.value)}
-                                className="w-24"
+                                className="w-24 text-center"
                                 placeholder="PO No"
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center">
                               <Input
                                 type="date"
                                 value={item.po_date}
                                 onChange={(e) => handleItemChange(index, 'po_date', e.target.value)}
-                                className="w-32"
+                                className="w-32 text-center"
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center">
                               <Input
                                 type="number"
                                 value={item.quantity}
                                 onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
                                 min="1"
-                                className="w-16"
+                                className="w-16 text-center"
                               />
                             </TableCell>
-                            <TableCell className="text-slate-600">
+                            <TableCell className="text-center text-slate-600">
                               ₹{item.unit_price.toLocaleString('en-IN')}
                             </TableCell>
-                            <TableCell className="font-medium">
+                            <TableCell className="text-center font-medium">
                               ₹{item.amount.toLocaleString('en-IN')}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -629,7 +621,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
 
         {/* Footer with credits */}
         <div className="mt-8 text-center text-sm text-slate-500">
-          <p>© 2024 Developed by Ranganath Saravana</p>
+          <p>© 2025 SwiftBill v1.2 - Developed by Ranganath Saravana</p>
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -36,7 +35,7 @@ const ViewInvoiceModal = ({ invoice, isOpen, onClose }: ViewInvoiceModalProps) =
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">Invoice Details</h3>
               <p><span className="font-medium">Invoice No:</span> {invoice.invoice_no}</p>
-              <p><span className="font-medium">Date:</span> {format(new Date(invoice.bill_date), 'dd MMM yyyy')}</p>
+              <p><span className="font-medium">Date:</span> {new Date(invoice.bill_date).toLocaleDateString()}</p>
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">Client Details</h3>
@@ -67,7 +66,7 @@ const ViewInvoiceModal = ({ invoice, isOpen, onClose }: ViewInvoiceModalProps) =
                       <TableCell>{item.hsn}</TableCell>
                       <TableCell>{item.po_no || '-'}</TableCell>
                       <TableCell>
-                        {item.po_date ? format(new Date(item.po_date), 'dd MMM yyyy') : '-'}
+                        {item.po_date ? new Date(item.po_date).toLocaleDateString() : '-'}
                       </TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">₹{item.unit_price.toLocaleString('en-IN')}</TableCell>

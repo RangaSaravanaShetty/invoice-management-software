@@ -100,7 +100,7 @@ npm run dist          # Packages the app using electron-builder
 - [ ] Multi-user or team access support  
 - [ ] Enhanced error handling and user notifications  
 - [ ] Dark mode toggle  
-- [x] Improved PDF export customization  
+- [x] Improved PDF export  
 - [ ] Unit and integration test coverage  
 - [ ] Import/export via CSV/JSON  
 - [ ] UI polish and visual refinements  
