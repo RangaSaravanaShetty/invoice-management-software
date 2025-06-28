@@ -97,7 +97,8 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
         content: [
           { text: company.company_name, style: 'header' },
           { text: company.address, style: 'subheader' },
-          { text: `GSTIN: ${company.gstin} | Phone: ${company.phone} | Email: ${company.email}`, style: 'subheader' },
+          { text: `Phone: ${company.phone} | Email: ${company.email}`, style: 'subheader' },
+          { text: `GSTIN: ${company.gstin}`, style: 'gstinLine' },
           { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
           { text: 'MONTHLY STATEMENT', style: 'invoiceTitle' },
           { text: `Month: ${months[selectedMonth]}`, style: 'details' },
@@ -148,8 +149,9 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ] },
         ],
         styles: {
-          header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
+          header: { fontSize: 26, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
           subheader: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
+          gstinLine: { fontSize: 11, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
           invoiceTitle: { fontSize: 15, bold: true, alignment: 'center', margin: [0, 12, 0, 12], color: '#0f172a' },
           details: { fontSize: 10, margin: [0, 0, 0, 2], color: '#334155' },
           tableHeader: { bold: true, fontSize: 10, color: '#0f172a', fillColor: '#e3e8f0', alignment: 'center' },
