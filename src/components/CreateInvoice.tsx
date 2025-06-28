@@ -532,7 +532,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                                 type="date"
                                 value={item.po_date}
                                 onChange={(e) => handleItemChange(index, 'po_date', e.target.value)}
-                                className="w-32 text-center"
+                                className="w-36 text-center"
                               />
                             </TableCell>
                             <TableCell className="text-center">
