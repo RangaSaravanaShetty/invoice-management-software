@@ -1,4 +1,4 @@
-# 🚀 SwiftBill v1.2
+# 🚀 SwiftBill v1.3.0
 
 **SwiftBill** is a modern, cross-platform desktop application for managing invoices, clients, and items — built with React, Vite, Electron, and TypeScript.
 
@@ -110,7 +110,7 @@ npm run dist          # Packages the app using electron-builder
 
 ## 🤝 Contributing
 
-Pull requests, issues, and suggestions are welcome. Let’s make SwiftBill better together!
+Pull requests, issues, and suggestions are welcome. Let's make SwiftBill better together!
 
 ---
 

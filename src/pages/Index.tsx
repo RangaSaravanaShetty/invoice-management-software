@@ -204,7 +204,7 @@ const Index = () => {
 
               {/* Footer with credits */}
               <div className="mt-12 text-center text-sm text-slate-500">
-                <p>© 2025 SwiftBill v1.2 - Developed by Ranganath Saravana</p>
+                <p>© 2025 SwiftBill v1.3.0 - Developed by Ranganath Saravana</p>
               </div>
             </div>
           </div>

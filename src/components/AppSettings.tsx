@@ -140,7 +140,7 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
         const backupData = {
           database: compressDatabaseData(data), // Compressed binary data
           timestamp: new Date().toISOString(),
-          version: '1.4',
+          version: '1.3.0',
           format: 'compressed',
           originalSize: data.length
         };
@@ -220,7 +220,7 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
             
             console.log('Restoring from simplified backup format:', backupData);
             
-            if (backupData.version === '1.4' && backupData.format === 'compressed') {
+            if (backupData.version === '1.3.0' && backupData.format === 'compressed') {
               // New simplified compressed format
               if (!backupData.database) {
                 throw new Error('Invalid simplified backup file format.');

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format as formatDate, parseISO } from 'date-fns';
 import pdfMake from 'pdfmake/build/pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
+import { parseDateFromDDMMYYYY } from '@/lib/utils';
 pdfMake.vfs = vfsFonts.vfs;
 
 interface CreateInvoiceProps {
@@ -188,7 +189,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                 width: '50%',
                 stack: [
                   { text: `Invoice No: ${invoiceNo}`, style: 'invoiceNumber' },
-                  { text: `Date: ${new Date(billDate).toLocaleDateString()}`, style: 'invoiceDate' },
+                  { text: `Date: ${parseDateFromDDMMYYYY(billDate).toLocaleDateString()}`, style: 'invoiceDate' },
                 ],
                 alignment: 'right',
               },
@@ -678,7 +679,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
 
         {/* Footer with credits */}
         <div className="mt-8 text-center text-sm text-slate-500">
-          <p>© 2025 SwiftBill v1.2 - Developed by Ranganath Saravana</p>
+          <p>© 2025 SwiftBill v1.3.0 - Developed by Ranganath Saravana</p>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { X } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseDateFromDDMMYYYY } from '@/lib/utils';
 
 interface ViewInvoiceModalProps {
   invoice: any;
@@ -35,7 +36,7 @@ const ViewInvoiceModal = ({ invoice, isOpen, onClose }: ViewInvoiceModalProps) =
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">Invoice Details</h3>
               <p><span className="font-medium">Invoice No:</span> {invoice.invoice_no}</p>
-              <p><span className="font-medium">Date:</span> {new Date(invoice.bill_date).toLocaleDateString()}</p>
+              <p><span className="font-medium">Date:</span> {parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}</p>
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">Client Details</h3>
@@ -66,7 +67,7 @@ const ViewInvoiceModal = ({ invoice, isOpen, onClose }: ViewInvoiceModalProps) =
                       <TableCell>{item.hsn}</TableCell>
                       <TableCell>{item.po_no || '-'}</TableCell>
                       <TableCell>
-                        {item.po_date ? new Date(item.po_date).toLocaleDateString() : '-'}
+                        {item.po_date ? parseDateFromDDMMYYYY(item.po_date).toLocaleDateString() : '-'}
                       </TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">₹{item.unit_price.toLocaleString('en-IN')}</TableCell>

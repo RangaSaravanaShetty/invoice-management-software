@@ -12,7 +12,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'SwiftBill v1.2',
+    title: 'SwiftBill v1.3.0',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

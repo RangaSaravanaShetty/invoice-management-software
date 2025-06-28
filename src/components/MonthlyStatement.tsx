@@ -5,9 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, FileDown, Calendar } from 'lucide-react';
 import { useDatabaseStore } from '@/store/databaseStore';
-import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 import pdfMake from 'pdfmake/build/pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
+import { parseDateFromDDMMYYYY } from '@/lib/utils';
 pdfMake.vfs = vfsFonts.vfs;
 import { toast } from '@/components/ui/use-toast';
 
@@ -36,16 +37,10 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
 
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
-  // Helper function to parse date from dd-MM-yyyy format
-  const parseDate = (dateStr: string) => {
-    const [day, month, year] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day); // month is 0-indexed in Date constructor
-  };
-
   const filteredInvoices = invoices
     .filter(invoice => {
       // Parse date from dd-MM-yyyy format
-      const invoiceDate = parseDate(invoice.bill_date);
+      const invoiceDate = parseDateFromDDMMYYYY(invoice.bill_date);
       const invoiceMonth = invoiceDate.getMonth();
       const invoiceYear = invoiceDate.getFullYear();
       return invoiceMonth === selectedMonth && invoiceYear === selectedYear;
@@ -83,7 +78,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
         ...filteredInvoices.map((item, idx) => [
           { text: (idx + 1).toString(), alignment: 'center', fontSize: 8 },
           { text: item.invoice_no || '', alignment: 'center', fontSize: 8 },
-          { text: parseDate(item.bill_date).toLocaleDateString(), alignment: 'center', fontSize: 8 },
+          { text: parseDateFromDDMMYYYY(item.bill_date).toLocaleDateString(), alignment: 'center', fontSize: 8 },
           { text: item.company_name || '', alignment: 'center', fontSize: 8 },
           { text: item.base_amount?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
           { text: item.cgst?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
@@ -333,7 +328,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                       <TableRow key={invoice.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium text-center">{invoice.invoice_no}</TableCell>
                         <TableCell className="text-center">
-                          {parseDate(invoice.bill_date).toLocaleDateString()}
+                          {parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-slate-600 text-center">{invoice.company_name}</TableCell>
                         <TableCell className="text-center">

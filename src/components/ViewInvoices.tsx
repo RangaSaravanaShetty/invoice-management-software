@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import ViewInvoiceModal from './ViewInvoiceModal';
 import pdfMake from 'pdfmake/build/pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
+import { parseDateFromDDMMYYYY } from '@/lib/utils';
 pdfMake.vfs = vfsFonts.vfs;
 
 interface ViewInvoicesProps {
@@ -175,7 +176,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                 width: '50%',
                 stack: [
                   { text: `Invoice No: ${invoice.invoice_no}`, style: 'invoiceNumber' },
-                  { text: `Date: ${new Date(invoice.bill_date).toLocaleDateString()}`, style: 'invoiceDate' },
+                  { text: `Date: ${parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}`, style: 'invoiceDate' },
                 ],
                 alignment: 'right',
               },
@@ -410,7 +411,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                       <TableRow key={invoice.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium">{invoice.invoice_no}</TableCell>
                         <TableCell>
-                          {new Date(invoice.bill_date).toLocaleDateString()}
+                          {parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-slate-600">{invoice.company_name}</TableCell>
                         <TableCell className="text-right">
@@ -512,7 +513,7 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
                   <p className="text-sm text-slate-600">This Month</p>
                   <p className="text-2xl font-bold text-slate-800">
                     {invoices.filter(inv => {
-                      const invDate = new Date(inv.bill_date);
+                      const invDate = parseDateFromDDMMYYYY(inv.bill_date);
                       const now = new Date();
                       return invDate.getMonth() === now.getMonth() && invDate.getFullYear() === now.getFullYear();
                     }).length}
