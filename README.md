@@ -1,4 +1,4 @@
-# Invoice Management Software
+# SwiftBill v1.2
 
 A modern, cross-platform desktop application for managing invoices, clients, and items, built with React, Vite, Electron, and TypeScript.
 
@@ -9,6 +9,8 @@ A modern, cross-platform desktop application for managing invoices, clients, and
 - Customizable company and client details
 - Modern, responsive UI with shadcn-ui and Tailwind CSS
 - Electron-powered: runs as a native desktop app on Windows, Mac, and Linux
+- CSV import functionality for bulk item management
+- Backup and restore functionality for data safety
 
 ## Prerequisites
 - [Node.js](https://nodejs.org/) (v16 or higher recommended)
@@ -19,8 +21,8 @@ A modern, cross-platform desktop application for managing invoices, clients, and
 
 ### 1. Clone the Repository
 ```sh
-git clone https://github.com/RangaSaravanaShetty/invoice-management-software.git
-cd invoice-management-software
+git clone https://github.com/RangaSaravanaShetty/swiftbill.git
+cd swiftbill
 ```
 
 ### 2. Install Dependencies
@@ -29,7 +31,8 @@ npm install
 ```
 
 ### 3. Run the Application (Development Mode)
-This will launch both the React frontend and the Electron desktop window.
+This launches the application in development mode with both the React frontend and Electron desktop window. Note: Some features may require a production build for full functionality as this is originally developed with electron in mind.
+
 ```sh
 npm run electron-dev
 ```
@@ -57,7 +60,7 @@ npm run dist          # Packages the Electron app into an installer (requires el
 - [Electron](https://www.electronjs.org/)
 - [shadcn-ui](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
-- [pdf-lib](https://pdf-lib.js.org/)
+- [pdfmake](https://pdfmake.github.io/docs/)
 
 ## Troubleshooting
 - **White/blank window on launch:** Ensure all dependencies are installed and try `npm run electron-dev` again.
@@ -72,7 +75,7 @@ npm run dist          # Packages the Electron app into an installer (requires el
 - [ ] Add support for multi-user or team access
 - [ ] Improve error handling and user feedback
 - [ ] Add dark mode toggle in settings
-- [x] Enhance PDF export customization (logo, footer, etc.) 
+- [x] Enhance PDF export customization
 - [ ] Write more unit and integration tests
 - [ ] Support import/export of data (CSV, JSON)
 - [ ] Visual Improvements

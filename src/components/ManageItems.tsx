@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Edit, Trash2, Search, Package } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Trash2, Search, Package, Upload } from 'lucide-react';
 import { useDatabaseStore, type Item } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
 
@@ -109,6 +108,131 @@ const ManageItems = ({ onBack }: ManageItemsProps) => {
     setFormData({ description: '', hsn: '', unit_price: 0 });
   };
 
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset the input
+    e.target.value = '';
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast({
+        title: "Invalid File",
+        description: "Please select a CSV file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const csvText = event.target?.result as string;
+        const lines = csvText.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          toast({
+            title: "Invalid CSV",
+            description: "CSV file must have at least a header row and one data row.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Parse header row
+        const headerRow = lines[0].split(',').map(col => col.trim().toLowerCase());
+        const descriptionIndex = headerRow.findIndex(col => col.includes('description'));
+        const hsnIndex = headerRow.findIndex(col => col.includes('hsn') || col.includes('code'));
+        const priceIndex = headerRow.findIndex(col => col.includes('price'));
+
+        if (descriptionIndex === -1 || priceIndex === -1) {
+          toast({
+            title: "Invalid CSV Format",
+            description: "CSV must contain 'Description' and 'Price' columns. HSN Code is optional.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Parse data rows
+        const itemsToAdd: Omit<Item, 'id'>[] = [];
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          const columns = line.split(',').map(col => col.trim());
+          
+          if (columns.length < Math.max(descriptionIndex, priceIndex) + 1) {
+            errorCount++;
+            continue;
+          }
+
+          const description = columns[descriptionIndex];
+          const hsn = hsnIndex !== -1 ? columns[hsnIndex] || '' : '';
+          const priceStr = columns[priceIndex];
+          const price = parseFloat(priceStr);
+
+          if (!description || isNaN(price) || price < 0) {
+            errorCount++;
+            continue;
+          }
+
+          itemsToAdd.push({
+            description,
+            hsn,
+            unit_price: price,
+          });
+        }
+
+        if (itemsToAdd.length === 0) {
+          toast({
+            title: "No Valid Items",
+            description: "No valid items found in the CSV file.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Add items to database
+        for (const item of itemsToAdd) {
+          try {
+            await addItem(item);
+            successCount++;
+          } catch (error) {
+            errorCount++;
+          }
+        }
+
+        // Show results
+        if (successCount > 0) {
+          toast({
+            title: "Import Successful",
+            description: `Successfully imported ${successCount} items${errorCount > 0 ? ` (${errorCount} failed)` : ''}.`,
+          });
+        } else {
+          toast({
+            title: "Import Failed",
+            description: "Failed to import any items. Please check your CSV format.",
+            variant: "destructive",
+          });
+        }
+
+      } catch (error) {
+        console.error('CSV import error:', error);
+        toast({
+          title: "Import Error",
+          description: "Failed to process CSV file. Please check the format.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
       <div className="container mx-auto max-w-6xl">
@@ -124,64 +248,98 @@ const ManageItems = ({ onBack }: ManageItemsProps) => {
             </h1>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-orange-500 to-red-600">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
+          <div className="flex items-center gap-2">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-to-r from-orange-500 to-red-600">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingItem ? 'Edit Item' : 'Add New Item'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                  <div>
+                    <Label htmlFor="description">Description *</Label>
+                    <Input
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      className="mt-1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="hsn">HSN Code</Label>
+                    <Input
+                      id="hsn"
+                      value={formData.hsn}
+                      onChange={(e) => setFormData({ ...formData, hsn: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="unit_price">Unit Price (₹) *</Label>
+                    <Input
+                      id="unit_price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.unit_price}
+                      onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
+                      className="mt-1"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="flex-1">
+                      {editingItem ? 'Update' : 'Add'} Item
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleDialogClose}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+            
+            <div className="relative">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCSVImport}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                id="csv-import"
+              />
+              <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700">
+                <Upload className="h-4 w-4 mr-2" />
+                Import CSV
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? 'Edit Item' : 'Add New Item'}
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                <div>
-                  <Label htmlFor="description">Description *</Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="hsn">HSN Code</Label>
-                  <Input
-                    id="hsn"
-                    value={formData.hsn}
-                    onChange={(e) => setFormData({ ...formData, hsn: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="unit_price">Unit Price (₹) *</Label>
-                  <Input
-                    id="unit_price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.unit_price}
-                    onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
-                    className="mt-1"
-                    required
-                  />
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">
-                    {editingItem ? 'Update' : 'Add'} Item
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleDialogClose}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+            </div>
+          </div>
         </div>
+
+        {/* CSV Import Info */}
+        <Card className="mb-6 border-0 shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Upload className="h-3 w-3 text-white" />
+              </div>
+              <div>
+                <h4 className="font-medium text-blue-900 mb-1">CSV Import Format</h4>
+                <p className="text-sm text-blue-700">
+                  Import items from a CSV file with columns: <strong>Description</strong>, <strong>HSN Code</strong> (optional), and <strong>Price</strong>. 
+                  The first row should contain headers. Example: <code className="bg-blue-100 px-1 rounded">Description,HSN Code,Price</code>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Content */}
         <Card className="shadow-lg border-0">

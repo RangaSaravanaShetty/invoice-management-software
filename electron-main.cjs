@@ -1,6 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { createWriteStream, createReadStream } = require('fs');
+const { pipeline } = require('stream');
+const { promisify } = require('util');
+const pipelineAsync = promisify(pipeline);
 
 let mainWindow;
 
@@ -8,6 +12,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'SwiftBill v1.2',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -39,9 +44,26 @@ function createWindow() {
         },
       ],
     },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Developer Tools',
+          accelerator: 'Ctrl+Shift+I',
+          click: () => {
+            mainWindow.webContents.toggleDevTools();
+          },
+        },
+      ],
+    },
   ];
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+
+  // Register global shortcut for developer tools
+  globalShortcut.register('CommandOrControl+Shift+I', () => {
+    mainWindow.webContents.toggleDevTools();
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -54,8 +76,16 @@ ipcMain.handle('export-database', async (event, { data, exportPath }) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    // Write as binary
-    fs.writeFileSync(exportPath, Buffer.from(data), 'binary');
+    
+    // Check if data is binary (array) or text (string)
+    if (Array.isArray(data)) {
+      // Binary data - write as binary
+      fs.writeFileSync(exportPath, Buffer.from(data), 'binary');
+    } else {
+      // Text data (JSON) - write as UTF-8
+      fs.writeFileSync(exportPath, data, 'utf8');
+    }
+    
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -73,7 +103,7 @@ ipcMain.handle('select-folder', async () => {
   return result.filePaths[0];
 });
 
-const dbFilePath = path.join(app.getPath('userData'), 'invoicedb.bin');
+const dbFilePath = path.join(app.getPath('userData'), 'swiftbill.bin');
 
 // IPC handler to read the database file
 ipcMain.handle('read-database-file', async () => {
@@ -102,6 +132,68 @@ ipcMain.handle('write-database-file', async (event, { data }) => {
 // IPC handler to return the correct path to sql-wasm.wasm using process.resourcesPath
 ipcMain.handle('get-sql-wasm-path', () => {
   return path.join(process.resourcesPath, 'sql-wasm.wasm');
+});
+
+// IPC handler to get the database file path
+ipcMain.handle('get-database-path', () => {
+  return dbFilePath;
+});
+
+// IPC handler to clear the database file (for testing)
+ipcMain.handle('clear-database', async () => {
+  try {
+    if (fs.existsSync(dbFilePath)) {
+      fs.unlinkSync(dbFilePath);
+      return { success: true, message: 'Database cleared successfully' };
+    } else {
+      return { success: true, message: 'Database file does not exist' };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC handler to create a simple backup (copy database file)
+ipcMain.handle('create-simple-backup', async (event, { backupPath }) => {
+  try {
+    if (!fs.existsSync(dbFilePath)) {
+      return { success: false, error: 'Database file does not exist' };
+    }
+    
+    // Ensure the backups directory exists
+    const backupDir = path.dirname(backupPath);
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
+    // Copy the database file directly
+    fs.copyFileSync(dbFilePath, backupPath);
+    
+    return { success: true, message: 'Backup created successfully' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC handler to restore from a simple backup (copy database file)
+ipcMain.handle('restore-simple-backup', async (event, { backupPath }) => {
+  try {
+    if (!fs.existsSync(backupPath)) {
+      return { success: false, error: 'Backup file does not exist' };
+    }
+    
+    // Copy the backup file to replace the current database
+    fs.copyFileSync(backupPath, dbFilePath);
+    
+    return { success: true, message: 'Backup restored successfully' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Handle IPC messages
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
 });
 
 app.on('window-all-closed', () => {

@@ -1,7 +1,7 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "swiftbill",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -95,8 +95,8 @@
   },
   "main": "electron-main.cjs",
   "build": {
-    "appId": "com.yourcompany.invoiceapp",
-    "productName": "Invoice Management Software",
+    "appId": "com.swiftbill.app",
+    "productName": "SwiftBill",
     "files": [
       "dist/",
       "electron-main.cjs",
@@ -118,6 +118,6 @@
     },
     "icon": "public/icon.ico"
   },
-  "description": "A modern, offline-capable invoice management desktop app built with Electron and React.",
+  "description": "SwiftBill - A modern, offline-capable invoice management desktop app built with Electron and React.",
   "author": "Ranganath Saravana"
 }

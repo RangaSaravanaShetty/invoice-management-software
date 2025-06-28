@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, CreditCard, Gauge, ListChecks, Settings, TrendingUp, Users, Package } from "lucide-react";
+import { CalendarIcon, CreditCard, Gauge, ListChecks, TrendingUp, Users, Package } from "lucide-react";
 import { useDatabaseStore } from '@/store/databaseStore';
 import CreateInvoice from '@/components/CreateInvoice';
 import ManageClients from '@/components/ManageClients';
@@ -90,7 +90,7 @@ const Index = () => {
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
-                    Invoice Dashboard
+                    SwiftBill Dashboard
                   </h1>
                   <p className="text-slate-600 text-lg">Manage your business invoicing with ease</p>
                 </div>
@@ -149,13 +149,6 @@ const Index = () => {
                       <TrendingUp className="h-4 w-4 mr-2" />
                       Monthly Statement
                     </Button>
-                    <Button 
-                      onClick={() => setCurrentView('settings')} 
-                      className="w-full justify-start h-12 bg-gradient-to-r from-slate-500 to-gray-600 hover:from-slate-600 hover:to-gray-700 text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
-                    >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                    </Button>
                   </CardContent>
                 </Card>
 
@@ -211,7 +204,7 @@ const Index = () => {
 
               {/* Footer with credits */}
               <div className="mt-12 text-center text-sm text-slate-500">
-                <p>© 2025 Developed by Ranganath Saravana</p>
+                <p>© 2025 SwiftBill v1.2 - Developed by Ranganath Saravana</p>
               </div>
             </div>
           </div>

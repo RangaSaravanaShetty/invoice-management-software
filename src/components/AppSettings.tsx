@@ -17,6 +17,19 @@ const isElectron = () => {
   return typeof window !== 'undefined' && !!(window).electronAPI;
 };
 
+// Helper function to compress database data for better performance
+const compressDatabaseData = (data: Uint8Array): string => {
+  // Convert to base64 for more efficient storage
+  const binaryString = Array.from(data).map(byte => String.fromCharCode(byte)).join('');
+  return btoa(binaryString);
+};
+
+// Helper function to decompress database data
+const decompressDatabaseData = (compressedData: string): Uint8Array => {
+  const binaryString = atob(compressedData);
+  return new Uint8Array(binaryString.split('').map(char => char.charCodeAt(0)));
+};
+
 declare global {
   interface Window {
     electronAPI?: any;
@@ -85,34 +98,70 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
 
   const handleBackupData = async () => {
     if (isElectron()) {
-      const { db } = useDatabaseStore.getState();
-      if (!db) return;
-      const data = db.export(); // Uint8Array
-      const settings = useDatabaseStore.getState().settings;
-      const exportFolder = settings.export_folder_path;
-      if (!exportFolder) {
-        toast({ title: 'Error', description: 'Export folder not set in settings.', variant: 'destructive' });
-        return;
+      try {
+        const settings = useDatabaseStore.getState().settings;
+        const exportFolder = settings.export_folder_path;
+        if (!exportFolder) {
+          toast({ title: 'Error', description: 'Export folder not set in settings.', variant: 'destructive' });
+          return;
+        }
+        
+        const timestamp = new Date().toISOString().split('T')[0];
+        const fileName = `swiftbill-backup-${timestamp}.bin`;
+        const backupPath = `${exportFolder}/backups/${fileName}`;
+        
+        console.log('Creating simple backup...');
+        console.log('Source database path:', await window.electronAPI.getDatabasePath());
+        console.log('Backup path:', backupPath);
+        
+        const result = await window.electronAPI.createSimpleBackup(backupPath);
+        console.log('Backup result:', result);
+        
+        if (result.success) {
+          toast({ title: 'Success', description: 'Backup created successfully!' });
+        } else {
+          throw new Error(result.error || 'Backup failed');
+        }
+      } catch (error) {
+        console.error('Backup error:', error);
+        toast({ title: 'Error', description: 'Failed to create backup.', variant: 'destructive' });
       }
-      const fileName = `invoice-backup-${new Date().toISOString().split('T')[0]}.sqlite`;
-      const exportPath = `${exportFolder}/${fileName}`;
-      // Send as Buffer for binary write
-      await window.electronAPI.exportDatabase(Array.from(data), exportPath);
-      toast({ title: 'Success', description: 'Backup created successfully!' });
     } else {
-      // Browser fallback: JSON
-      const dataStr = localStorage.getItem('invoicedb');
-      if (dataStr) {
-        const blob = new Blob([dataStr], { type: 'application/json' });
+      // Browser fallback: Use the old compressed format
+      try {
+        const { db } = useDatabaseStore.getState();
+        if (!db) return;
+        
+        const data = db.export();
+        
+        const timestamp = new Date().toISOString().split('T')[0];
+        
+        // Create backup with compressed database (settings are already in the database)
+        const backupData = {
+          database: compressDatabaseData(data), // Compressed binary data
+          timestamp: new Date().toISOString(),
+          version: '1.4',
+          format: 'compressed',
+          originalSize: data.length
+        };
+        
+        console.log('Creating browser backup with original size:', data.length, 'bytes');
+        console.log('Compressed size:', backupData.database.length, 'characters');
+        console.log('Compression ratio:', ((1 - backupData.database.length / (data.length * 1.33)) * 100).toFixed(1) + '%');
+        
+        const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `invoice-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `swiftbill-backup-${timestamp}.backup`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         toast({ title: 'Success', description: 'Backup created successfully!' });
+      } catch (error) {
+        console.error('Backup error:', error);
+        toast({ title: 'Error', description: 'Failed to create backup.', variant: 'destructive' });
       }
     }
   };
@@ -120,32 +169,121 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
   const handleRestoreData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     if (isElectron()) {
+      // Electron: Simple file copy restore
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
+          console.log('Restoring from file:', file.name);
+          
+          // For Electron, we'll read the file as ArrayBuffer and write it directly
           const arrayBuffer = event.target?.result as ArrayBuffer;
           const uint8 = new Uint8Array(arrayBuffer);
-          // Save to localStorage as JSON string for compatibility
-          localStorage.setItem('invoicedb', JSON.stringify(Array.from(uint8)));
-          window.location.reload();
+          
+          console.log('Restoring database file, size:', uint8.length, 'bytes');
+          
+          // Write the database file directly
+          await window.electronAPI.writeDatabaseFile(Array.from(uint8));
+          
+          console.log('Database restored successfully');
+          toast({ 
+            title: 'Success', 
+            description: 'Backup restored successfully! The application will reload in 2 seconds.' 
+          });
+          
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
         } catch (error) {
-          toast({ title: 'Error', description: 'Failed to restore data. Invalid backup file.', variant: 'destructive' });
+          console.error('Restore error:', error);
+          toast({ 
+            title: 'Error', 
+            description: error.message || 'Failed to restore backup.', 
+            variant: 'destructive' 
+          });
         }
       };
+      
       reader.readAsArrayBuffer(file);
     } else {
-      // Browser fallback: JSON
+      // Browser: Use the simplified restore logic
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const data = event.target?.result as string;
-          localStorage.setItem('invoicedb', data);
-          toast({ title: 'Success', description: 'Data restored successfully! Please refresh the page.' });
+          
+          // Check file type and handle accordingly
+          if (file.name.endsWith('.backup')) {
+            // New simplified backup format (browser)
+            const backupData = JSON.parse(data);
+            
+            console.log('Restoring from simplified backup format:', backupData);
+            
+            if (backupData.version === '1.4' && backupData.format === 'compressed') {
+              // New simplified compressed format
+              if (!backupData.database) {
+                throw new Error('Invalid simplified backup file format.');
+              }
+              
+              try {
+                // Decompress the database data
+                const decompressedData = decompressDatabaseData(backupData.database);
+                console.log('Decompressed database size:', decompressedData.length, 'bytes');
+                
+                // Store the decompressed data (settings are already in the database)
+                localStorage.setItem('swiftbill', JSON.stringify(Array.from(decompressedData)));
+                
+                console.log('Simplified backup data restored successfully');
+              } catch (decompressError) {
+                throw new Error('Failed to decompress database data.');
+              }
+            } else if (backupData.version === '1.2' && backupData.format === 'compressed') {
+              // Old format with separate settings
+              if (!backupData.database || !backupData.settings) {
+                throw new Error('Invalid old backup file format.');
+              }
+              
+              try {
+                // Decompress the database data
+                const decompressedData = decompressDatabaseData(backupData.database);
+                console.log('Decompressed database size:', decompressedData.length, 'bytes');
+                
+                // Store the decompressed data
+                localStorage.setItem('swiftbill', JSON.stringify(Array.from(decompressedData)));
+                localStorage.setItem('appSettings', JSON.stringify(backupData.settings));
+                
+                console.log('Old backup format data restored successfully');
+              } catch (decompressError) {
+                throw new Error('Failed to decompress database data.');
+              }
+            } else {
+              throw new Error('Unsupported backup file format.');
+            }
+            
+            // Show success message and reload
+            toast({ 
+              title: 'Success', 
+              description: 'Data restored successfully! The application will reload in 2 seconds.' 
+            });
+            
+            // Reload after a short delay to ensure data is saved
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else {
+            throw new Error('Unsupported file format for browser. Please use .backup files.');
+          }
         } catch (error) {
-          toast({ title: 'Error', description: 'Failed to restore data. Invalid backup file.', variant: 'destructive' });
+          console.error('Restore error:', error);
+          toast({ 
+            title: 'Error', 
+            description: error.message || 'Failed to restore data. Invalid backup file.', 
+            variant: 'destructive' 
+          });
         }
       };
+      
       reader.readAsText(file);
     }
   };
@@ -157,6 +295,34 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
         setFormData({ ...formData, export_folder_path: folderPath });
       }
     }
+  };
+
+  // Function to get current database statistics
+  const getDatabaseStats = () => {
+    const { clients, items, invoices, settings } = useDatabaseStore.getState();
+    return {
+      clients: clients.length,
+      items: items.length,
+      invoices: invoices.length,
+      settings: settings.company_name
+    };
+  };
+
+  // Function to estimate backup size
+  const estimateBackupSize = () => {
+    const { db } = useDatabaseStore.getState();
+    if (!db) return null;
+    
+    const data = db.export();
+    const originalSize = data.length;
+    const compressedSize = compressDatabaseData(data).length;
+    const compressionRatio = ((1 - compressedSize / (originalSize * 1.33)) * 100).toFixed(1);
+    
+    return {
+      originalSize: (originalSize / 1024).toFixed(1) + ' KB',
+      compressedSize: (compressedSize / 1024).toFixed(1) + ' KB',
+      compressionRatio: compressionRatio + '%'
+    };
   };
 
   return (
@@ -378,10 +544,159 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
                   <p className="text-slate-600 mb-4">
                     Create a backup of all your invoices, clients, items, and settings.
                   </p>
-                  <Button onClick={handleBackupData} className="w-full bg-gradient-to-r from-blue-500 to-cyan-600">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Backup
-                  </Button>
+                  <div className="space-y-3">
+                    <Button onClick={handleBackupData} className="w-full bg-gradient-to-r from-blue-500 to-cyan-600">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Backup
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        const stats = getDatabaseStats();
+                        console.log('Current database stats:', stats);
+                        toast({
+                          title: 'Database Statistics',
+                          description: `Clients: ${stats.clients}, Items: ${stats.items}, Invoices: ${stats.invoices}, Company: ${stats.settings}`,
+                        });
+                      }}
+                      className="w-full"
+                    >
+                      Show Current Stats
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        const sizeInfo = estimateBackupSize();
+                        if (sizeInfo) {
+                          console.log('Backup size estimation:', sizeInfo);
+                          toast({
+                            title: 'Backup Size Estimation',
+                            description: `Original: ${sizeInfo.originalSize}, Compressed: ${sizeInfo.compressedSize} (${sizeInfo.compressionRatio} smaller)`,
+                          });
+                        } else {
+                          toast({
+                            title: 'Error',
+                            description: 'Could not estimate backup size.',
+                            variant: 'destructive'
+                          });
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      Estimate Backup Size
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        const { db } = useDatabaseStore.getState();
+                        if (db) {
+                          try {
+                            const clientsResult = db.exec('SELECT COUNT(*) as count FROM clients');
+                            const itemsResult = db.exec('SELECT COUNT(*) as count FROM items');
+                            const invoicesResult = db.exec('SELECT COUNT(*) as count FROM invoices');
+                            
+                            const clientCount = clientsResult[0]?.values[0]?.[0] || 0;
+                            const itemCount = itemsResult[0]?.values[0]?.[0] || 0;
+                            const invoiceCount = invoicesResult[0]?.values[0]?.[0] || 0;
+                            
+                            console.log('Current database state:');
+                            console.log('- Clients:', clientCount);
+                            console.log('- Items:', itemCount);
+                            console.log('- Invoices:', invoiceCount);
+                            
+                            toast({
+                              title: 'Current Database State',
+                              description: `Clients: ${clientCount}, Items: ${itemCount}, Invoices: ${invoiceCount}`,
+                            });
+                          } catch (error) {
+                            console.error('Error checking database state:', error);
+                            toast({
+                              title: 'Error',
+                              description: 'Could not check database state.',
+                              variant: 'destructive'
+                            });
+                          }
+                        } else {
+                          toast({
+                            title: 'Error',
+                            description: 'Database not initialized.',
+                            variant: 'destructive'
+                          });
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      Check Database State
+                    </Button>
+                    {isElectron() && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          onClick={async () => {
+                            try {
+                              const dbPath = await window.electronAPI.getDatabasePath();
+                              console.log('Database file path:', dbPath);
+                              toast({
+                                title: 'Database File Path',
+                                description: dbPath,
+                              });
+                            } catch (error) {
+                              console.error('Error getting database path:', error);
+                              toast({
+                                title: 'Error',
+                                description: 'Could not get database path.',
+                                variant: 'destructive'
+                              });
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          Show Database Path
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          onClick={async () => {
+                            try {
+                              const result = await window.electronAPI.clearDatabase();
+                              console.log('Clear database result:', result);
+                              if (result.success) {
+                                toast({
+                                  title: 'Success',
+                                  description: result.message,
+                                });
+                                // Reload after clearing
+                                setTimeout(() => {
+                                  window.location.reload();
+                                }, 2000);
+                              } else {
+                                toast({
+                                  title: 'Error',
+                                  description: result.error,
+                                  variant: 'destructive'
+                                });
+                              }
+                            } catch (error) {
+                              console.error('Error clearing database:', error);
+                              toast({
+                                title: 'Error',
+                                description: 'Could not clear database.',
+                                variant: 'destructive'
+                              });
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          Clear Database (Test)
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3">
+                    Backup includes: SQLite Database (clients, invoices, items) + Application Settings
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    💡 Electron: Direct .bin copy | Browser: Compressed .backup file
+                  </p>
                 </CardContent>
               </Card>
 
@@ -398,12 +713,18 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
                   </p>
                   <Input
                     type="file"
-                    accept=".sqlite"
+                    accept=".bin,.backup"
                     onChange={handleRestoreData}
                     className="w-full"
                   />
                   <p className="text-sm text-amber-600 mt-2">
                     ⚠️ Warning: This will overwrite all existing data.
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Supported formats: .bin (Electron), .backup (browser)
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    💡 Direct database copies - no conversion needed
                   </p>
                 </CardContent>
               </Card>

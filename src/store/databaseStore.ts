@@ -128,11 +128,31 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       let db;
       if (isElectron()) {
         // Try to load from file
+        console.log('[Electron] Attempting to read database file...');
         const result = await window.electronAPI.readDatabaseFile();
+        console.log('[Electron] Database read result:', result);
+        
         if (result.success && result.data) {
+          console.log('[Electron] Database file found, size:', result.data.length, 'bytes');
           const data = new Uint8Array(result.data);
           db = new SQL.Database(data);
+          console.log('[Electron] Database loaded from file successfully');
+          
+          // Debug: Check what's in the loaded database
+          try {
+            const clientsResult = db.exec('SELECT COUNT(*) as count FROM clients');
+            const itemsResult = db.exec('SELECT COUNT(*) as count FROM items');
+            const invoicesResult = db.exec('SELECT COUNT(*) as count FROM invoices');
+            
+            console.log('[Electron] Loaded database contains:');
+            console.log('- Clients:', clientsResult[0]?.values[0]?.[0] || 0);
+            console.log('- Items:', itemsResult[0]?.values[0]?.[0] || 0);
+            console.log('- Invoices:', invoicesResult[0]?.values[0]?.[0] || 0);
+          } catch (dbError) {
+            console.error('[Electron] Error checking loaded database:', dbError);
+          }
         } else {
+          console.log('[Electron] No database file found, creating new database');
           db = new SQL.Database();
           db.exec(`
             CREATE TABLE IF NOT EXISTS clients (
@@ -179,14 +199,19 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
           // Save initial db to file
           const data = db.export();
           await window.electronAPI.writeDatabaseFile(Array.from(data));
+          console.log('[Electron] New database created and saved to file');
         }
       } else {
         // Web: use localStorage
-        const savedDb = localStorage.getItem('invoicedb');
+        console.log('[Browser] Attempting to read database from localStorage...');
+        const savedDb = localStorage.getItem('swiftbill');
         if (savedDb) {
+          console.log('[Browser] Database found in localStorage');
           const data = new Uint8Array(JSON.parse(savedDb));
           db = new SQL.Database(data);
+          console.log('[Browser] Database loaded from localStorage successfully');
         } else {
+          console.log('[Browser] No database in localStorage, creating new database');
           db = new SQL.Database();
           db.exec(`
             CREATE TABLE IF NOT EXISTS clients (
@@ -231,15 +256,35 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
             INSERT OR IGNORE INTO settings (id) VALUES (1);
           `);
           const data = db.export();
-          localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
+          localStorage.setItem('swiftbill', JSON.stringify(Array.from(data)));
+          console.log('[Browser] New database created and saved to localStorage');
         }
       }
       set({ db });
+      console.log('[Database] Loading data from database...');
       await get().loadClients();
       await get().loadItems();
       await get().loadInvoices();
       await get().loadSettings();
+      
+      // Check if there are restored settings to apply
+      const restoredSettings = localStorage.getItem('appSettings');
+      if (restoredSettings) {
+        try {
+          console.log('Found restored settings, applying them...');
+          const settings = JSON.parse(restoredSettings);
+          console.log('Restored settings:', settings);
+          await get().updateSettings(settings);
+          // Clear the restored settings after applying
+          localStorage.removeItem('appSettings');
+          console.log('Restored settings applied successfully');
+        } catch (error) {
+          console.error('Error applying restored settings:', error);
+        }
+      }
+      
       await get().loadMetrics();
+      console.log('[Database] Initialization complete');
     } catch (error) {
       console.error('[sql.js] Failed to load WASM or initialize database:', error);
       throw error;
@@ -254,7 +299,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     if (isElectron()) {
       await window.electronAPI.writeDatabaseFile(Array.from(data));
     } else {
-      localStorage.setItem('invoicedb', JSON.stringify(Array.from(data)));
+      localStorage.setItem('swiftbill', JSON.stringify(Array.from(data)));
     }
   },
 
@@ -306,6 +351,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     if (!db) return;
     
     try {
+      console.log('[loadClients] Loading clients from database...');
       const result = db.exec('SELECT * FROM clients ORDER BY name');
       const clients = result[0] ? result[0].values.map((row: any) => ({
         id: row[0],
@@ -314,6 +360,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         gstin: row[3],
       })) : [];
       
+      console.log('[loadClients] Loaded', clients.length, 'clients:', clients);
       set({ clients });
     } catch (error) {
       console.error('Error loading clients:', error);
@@ -374,6 +421,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     if (!db) return;
     
     try {
+      console.log('[loadItems] Loading items from database...');
       const result = db.exec('SELECT * FROM items ORDER BY description');
       const items = result[0] ? result[0].values.map((row: any) => ({
         id: row[0],
@@ -382,6 +430,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         unit_price: row[3],
       })) : [];
       
+      console.log('[loadItems] Loaded', items.length, 'items:', items);
       set({ items });
     } catch (error) {
       console.error('Error loading items:', error);
@@ -461,6 +510,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     if (!db) return;
     
     try {
+      console.log('[loadInvoices] Loading invoices from database...');
       const result = db.exec('SELECT * FROM invoices ORDER BY bill_date DESC');
       const invoices = result[0] ? result[0].values.map((row: any) => ({
         id: row[0],
@@ -475,6 +525,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         items_json: row[9],
       })) : [];
       
+      console.log('[loadInvoices] Loaded', invoices.length, 'invoices:', invoices);
       set({ invoices });
     } catch (error) {
       console.error('Error loading invoices:', error);
