@@ -232,54 +232,80 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
             },
           },
           { text: '\n' },
+          // Invisible table for totaling section
           {
-            columns: [
-              {
-                width: '70%',
-                stack: [],
-                alignment: 'left',
-              },
-              {
-                width: '35%',
-                stack: [
-                  { text: `Base Amount : ₹${baseAmount}`, style: 'totalLine', alignment: 'left' },
-                  { text: `CGST @9% : ₹${cgst}`, style: 'totalLine', alignment: 'left' },
-                  { text: `SGST @9% : ₹${sgst}`, style: 'totalLine', alignment: 'left' },
-                  { text: `Total Tax @18% : ₹${(round2(invoice.cgst) + round2(invoice.sgst)).toFixed(2)}`, style: 'totalLine', alignment: 'left' },
-                  { text: `Grand Total : ₹${grandTotal}`, style: 'grandTotalLine', alignment: 'left' },
+            table: {
+              widths: ['*', 'auto'],
+              body: [
+                [
+                  { text: 'Base Amount', style: 'totalLabel' },
+                  { text: `₹${baseAmount}`, style: 'totalValue' }
                 ],
-                alignment: 'right',
-              },
-            ],
-            columnGap: 10,
+                [
+                  { text: 'CGST @9%', style: 'totalLabel' },
+                  { text: `₹${cgst}`, style: 'totalValue' }
+                ],
+                [
+                  { text: 'SGST @9%', style: 'totalLabel' },
+                  { text: `₹${sgst}`, style: 'totalValue' }
+                ],
+                [
+                  { text: 'Total Tax @18%', style: 'totalLabel' },
+                  { text: `₹${(round2(invoice.cgst) + round2(invoice.sgst)).toFixed(2)}`, style: 'totalValue' }
+                ],
+                [
+                  { text: 'Grand Total', style: 'grandTotalLabel' },
+                  { text: `₹${grandTotal}`, style: 'grandTotalValue', margin: [8, 0, 0, 0] }
+                ],
+              ],
+            },
+            layout: {
+              hLineWidth: () => 0,
+              vLineWidth: () => 0,
+              paddingTop: () => 4,
+              paddingBottom: () => 4,
+              paddingLeft: () => 0,
+              paddingRight: () => 0,
+            },
+            alignment: 'right',
             margin: [0, 10, 0, 24],
-          },
-          { text: `Amount in words: ${convertToWordsWithPaise(invoice.total_amount)} Only`, style: 'amountWords', margin: [0, 16, 0, 4] },
-          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ], margin: [0, 16, 0, 16] },
-          { text: '\n' },
-          {
-            columns: [
-              {
-                width: '50%',
-                stack: [
-                  { text: 'Received goods in good condition', margin: [0, 0, 0, 8], style: 'footerNote' },
-                  { text: 'Receiver sign', margin: [0, 0, 0, 8], style: 'footerNote' },
-                  { text: 'Vehicle number: __________', margin: [0, 0, 0, 8], style: 'footerNote' },
-                ],
-                alignment: 'left',
-              },
-              {
-                width: '50%',
-                stack: [
-                  { text: `For ${company.company_name}`, alignment: 'center', margin: [0, 0, 0, 8], style: 'footerNote' },
-                  { text: 'Authorised signature', alignment: 'center', margin: [0, 0, 0, 8], style: 'footerNote' },
-                ],
-                alignment: 'center',
-              },
-            ],
-            columnGap: 10,
+            width: 240, // Set to 20% larger than typical width
           },
         ],
+        footer: function(currentPage, pageCount) {
+          return [
+            { text: `Amount in words: ${convertToWordsWithPaise(invoice.total_amount)} Only`, style: 'amountWords', margin: [30, 0, 0, 4] },
+            { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ], margin: [30, 8, 0, 8] },
+            {
+              table: {
+                widths: ['*', '*'],
+                body: [
+                  [
+                    {
+                      stack: [
+                        { text: 'Received goods in good condition', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                        { text: 'Receiver sign', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                        { text: 'Vehicle number: __________', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                      ],
+                      alignment: 'left',
+                      border: [false, false, false, false],
+                    },
+                    {
+                      stack: [
+                        { text: `For ${company.company_name}`, margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
+                        { text: 'Authorised signature', margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
+                      ],
+                      alignment: 'right',
+                      border: [false, false, false, false],
+                    }
+                  ]
+                ]
+              },
+              layout: 'noBorders',
+              margin: [30, 0, 0, 0]
+            }
+          ];
+        },
         styles: {
           header: { fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 10], color: '#1e293b' },
           subheader: { fontSize: 9, alignment: 'center', margin: [0, 0, 0, 2], color: '#334155' },
@@ -296,12 +322,14 @@ const ViewInvoices = ({ onBack, onEditInvoice }: ViewInvoicesProps) => {
           totals: { fontSize: 9, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
           amountWords: { fontSize: 8, italics: true, color: '#64748b', margin: [0, 8, 0, 0], alignment: 'center' },
           footerNote: { fontSize: 10, color: '#64748b' },
-          totalLine: { fontSize: 10, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
-          grandTotalLine: { fontSize: 10.8, bold: true, margin: [0, 4, 0, 0], color: '#0f172a' },
+          totalLabel: { fontSize: 10, bold: true, color: '#0f172a', alignment: 'right' },
+          totalValue: { fontSize: 10, bold: true, color: '#0f172a', alignment: 'right' },
+          grandTotalLabel: { fontSize: 10.8, bold: true, color: '#0f172a', alignment: 'right' },
+          grandTotalValue: { fontSize: 10.8, bold: true, color: '#0f172a', alignment: 'right' },
         },
         defaultStyle: { fontSize: 8 },
         pageSize: 'A4',
-        pageMargins: [30, 40, 30, 40],
+        pageMargins: [30, 40, 30, 80], // Increased bottom margin for footer
       };
 
       // Generate PDF and save (Electron or browser)
