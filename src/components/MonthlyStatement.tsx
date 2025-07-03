@@ -53,6 +53,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
     sgst: filteredInvoices.reduce((sum, inv) => sum + inv.sgst, 0),
     totalAmount: filteredInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
   };
+  const totalTax = totalStats.cgst + totalStats.sgst;
 
   // Calculate total quantity for all filtered invoices
   const totalQty = filteredInvoices.reduce((sum, invoice) => {
@@ -114,7 +115,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           {
             table: {
               headerRows: 1,
-              widths: [30, 60, 50, '*', 40, 60, 45, 45, 60],
+              widths: Array(tableBody[0].length).fill('*'),
               body: tableBody,
             },
             layout: {
@@ -143,6 +144,9 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
               { text: '\n' },
               { text: 'SGST: ', bold: true, fontSize: 9 },
               { text: `₹${totalStats.sgst.toLocaleString('en-IN')}`, fontSize: 9 },
+              { text: '\n' },
+              { text: 'Total Tax: ', bold: true, fontSize: 9 },
+              { text: `₹${totalTax.toLocaleString('en-IN')}`, fontSize: 9 },
               { text: '\n' },
               { text: 'Grand Total: ', bold: true, fontSize: 10, color: '#0f172a' },
               { text: `₹${totalStats.totalAmount.toLocaleString('en-IN')}`, fontSize: 10, bold: true, color: '#0f172a' },
@@ -265,7 +269,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
         </Card>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             <CardContent className="p-6">
               <div>
@@ -274,7 +278,6 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
               </div>
             </CardContent>
           </Card>
-          
           <Card className="border-0 shadow-lg bg-gradient-to-br from-green-500 to-green-600 text-white">
             <CardContent className="p-6">
               <div>
@@ -283,7 +286,6 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
               </div>
             </CardContent>
           </Card>
-          
           <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white">
             <CardContent className="p-6">
               <div>
@@ -292,7 +294,14 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
               </div>
             </CardContent>
           </Card>
-          
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
+            <CardContent className="p-6">
+              <div>
+                <p className="text-yellow-100 text-sm mb-1">Total Tax</p>
+                <p className="text-2xl font-bold">INR {totalTax.toLocaleString('en-IN')}</p>
+              </div>
+            </CardContent>
+          </Card>
           <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white">
             <CardContent className="p-6">
               <div>
@@ -379,6 +388,9 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                       </TableCell>
                       <TableCell className="text-center font-bold">
                         {totalStats.sgst.toLocaleString('en-IN')}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-yellow-600">
+                        {totalTax.toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-center font-bold text-green-600">
                         {totalStats.totalAmount.toLocaleString('en-IN')}
