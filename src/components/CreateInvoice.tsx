@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { format as formatDate, parseISO } from 'date-fns';
 import pdfMake from 'pdfmake/build/pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
-import { parseDateFromDDMMYYYY } from '@/lib/utils';
+import { parseDateFromDDMMYYYY, formatDateToDDMMYYYY } from '@/lib/utils';
+import { version } from '@/version';
 pdfMake.vfs = vfsFonts.vfs;
 
 interface CreateInvoiceProps {
@@ -29,6 +30,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
   const [searchValue, setSearchValue] = useState('');
   const [pdfExportLoading, setPdfExportLoading] = useState(false);
   const [lastSavedInvoice, setLastSavedInvoice] = useState<any>(null);
+  const [vehicleNumber, setVehicleNumber] = useState('');
   
   const {
     items,
@@ -133,6 +135,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
         sgst: getSgstAmount(),
         total_amount: getTotalAmount(),
         items_json: JSON.stringify(items),
+        vehicle_number: vehicleNumber,
       };
       await saveInvoice(invoice);
       // Prepare table body with new columns
@@ -148,14 +151,14 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           { text: 'Amount', style: 'tableHeader' },
         ],
         ...items.map((item, idx) => [
-          idx + 1,
-          item.po_no || '',
-          item.po_date || '',
-          item.description || '',
-          item.hsn || '',
-          item.quantity ?? '',
-          item.unit_price ?? '',
-          round2(item.amount ?? 0).toFixed(2),
+          { text: idx + 1, alignment: 'center' },
+          { text: item.po_no || '', alignment: 'center' },
+          { text: item.po_date ? formatDateToDDMMYYYY(parseDateFromDDMMYYYY(item.po_date)) : '', alignment: 'center' },
+          { text: item.description || '' },
+          { text: item.hsn || '', alignment: 'center' },
+          { text: item.quantity ?? '', alignment: 'center' },
+          { text: item.unit_price ?? '', alignment: 'center' },
+          { text: round2(item.amount ?? 0).toFixed(2), alignment: 'center' },
         ]),
       ];
       // Calculate totals
@@ -189,7 +192,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                 width: '50%',
                 stack: [
                   { text: `Invoice No: ${invoiceNo}`, style: 'invoiceNumber' },
-                  { text: `Date: ${parseDateFromDDMMYYYY(billDate).toLocaleDateString()}`, style: 'invoiceDate' },
+                  { text: `Date: ${formatDateToDDMMYYYY(parseDateFromDDMMYYYY(billDate))}`, style: 'invoiceDate' },
                 ],
                 alignment: 'right',
               },
@@ -201,7 +204,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
             table: {
               headerRows: 1,
               // Column widths: [Sl No, PO No, PO Date, Description, HSN, Quantity, Rate, Amount]
-              widths: [24, 48, 48, '*', 40, 20, 36, 48],
+              widths: [24, 48, 60, '*', 40, 20, 36, 60],
               body: [
                 [
                   { text: 'Sl No.', style: 'tableHeader' },
@@ -214,20 +217,20 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                   { text: 'Amount', style: 'tableHeader' },
                 ],
                 ...items.map((item, idx) => [
-                  idx + 1,
-                  item.po_no || '',
-                  item.po_date || '',
-                  item.description || '',
-                  item.hsn || '',
-                  item.quantity ?? '',
-                  item.unit_price ?? '',
-                  round2(item.amount ?? 0).toFixed(2),
+                  { text: idx + 1, alignment: 'center' },
+                  { text: item.po_no || '', alignment: 'center' },
+                  { text: item.po_date ? formatDateToDDMMYYYY(parseDateFromDDMMYYYY(item.po_date)) : '', alignment: 'center' },
+                  { text: item.description || '' },
+                  { text: item.hsn || '', alignment: 'center' },
+                  { text: item.quantity ?? '', alignment: 'center' },
+                  { text: item.unit_price ?? '', alignment: 'center' },
+                  { text: round2(item.amount ?? 0).toFixed(2), alignment: 'center' },
                 ]),
                 [
                   { text: 'Total Quantity:', style: 'tableFooter', colSpan: 5, alignment: 'right' },
                   '', '', '', '',
                   { text: `${totalQuantity}`, style: 'tableFooter', alignment: 'center' },
-                  { text: 'Total Amount', style: 'tableFooter', alignment: 'right' },
+                  { text: 'Total Amt', style: 'tableFooter', alignment: 'right' },
                   { text: `₹${baseAmount}`, style: 'tableFooter', alignment: 'center' },
                 ],
               ],
@@ -245,75 +248,62 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
             },
           },
           { text: '\n' },
-          // Invisible table for totaling section
           {
-            table: {
-              widths: ['*', 'auto'],
-              body: [
-                [
-                  { text: 'Base Amount', style: 'totalLabel' },
-                  { text: `₹${baseAmount}`, style: 'totalValue' }
-                ],
-                [
-                  { text: 'CGST @9%', style: 'totalLabel' },
-                  { text: `₹${cgst}`, style: 'totalValue' }
-                ],
-                [
-                  { text: 'SGST @9%', style: 'totalLabel' },
-                  { text: `₹${sgst}`, style: 'totalValue' }
-                ],
-                [
-                  { text: 'Total Tax @18%', style: 'totalLabel' },
-                  { text: `₹${(round2(getCgstAmount()) + round2(getSgstAmount())).toFixed(2)}`, style: 'totalValue' }
-                ],
-                [
-                  { text: 'Grand Total', style: 'grandTotalLabel' },
-                  { text: `₹${grandTotal}`, style: 'grandTotalValue', margin: [8, 0, 0, 0] }
-                ],
-              ],
-            },
-            layout: {
-              hLineWidth: () => 0,
-              vLineWidth: () => 0,
-              paddingTop: () => 4,
-              paddingBottom: () => 4,
-              paddingLeft: () => 0,
-              paddingRight: () => 0,
-            },
-            alignment: 'right',
+            columns: [
+              { text: `Amount in words: ${convertToWordsWithPaise(getTotalAmount())} Only`, style: 'totalLabel', bold: true, alignment: 'left', width: '*' },
+              {
+                table: {
+                  widths: ['*', 'auto'],
+                  body: [
+                    [ { text: 'Base Amount', style: 'totalLabel' }, { text: `₹${baseAmount}`, style: 'totalValue' } ],
+                    [ { text: `CGST @${cgstPercent}%`, style: 'totalLabel' }, { text: `₹${cgst}`, style: 'totalValue' } ],
+                    [ { text: `SGST @${sgstPercent}%`, style: 'totalLabel' }, { text: `₹${sgst}`, style: 'totalValue' } ],
+                    [ { text: `Total Tax @${(cgstPercent + sgstPercent)}%`, style: 'totalLabel' }, { text: `₹${(round2(getCgstAmount()) + round2(getSgstAmount())).toFixed(2)}`, style: 'totalValue' } ],
+                    [ { text: 'Grand Total', style: 'grandTotalLabel' }, { text: `₹${grandTotal}`, style: 'grandTotalValue', margin: [8, 0, 0, 0] } ],
+                  ],
+                },
+                layout: {
+                  hLineWidth: () => 0,
+                  vLineWidth: () => 0,
+                  paddingTop: () => 4,
+                  paddingBottom: () => 4,
+                  paddingLeft: () => 0,
+                  paddingRight: () => 0,
+                },
+                alignment: 'right',
+                margin: [0, 0, 0, 0],
+                width: 240,
+              }
+            ],
+            columnGap: 20,
             margin: [0, 10, 0, 24],
-            width: 240, // Set to 20% larger than typical width
           },
-          { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ], margin: [0, 16, 0, 16] },
         ],
         footer: function(currentPage, pageCount) {
           return [
-            { text: `Amount in words: ${convertToWordsWithPaise(getTotalAmount())} Only`, style: 'amountWords', margin: [30, 0, 0, 4] },
-            { canvas: [ { type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1, lineColor: '#cccccc' } ], margin: [30, 8, 0, 8] },
             {
               table: {
                 widths: ['*', '*'],
-                body: [
-                  [
-                    {
-                      stack: [
-                        { text: 'Received goods in good condition', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
-                        { text: 'Receiver sign', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
-                        { text: 'Vehicle number: __________', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
-                      ],
-                      alignment: 'left',
-                      border: [false, false, false, false],
-                    },
-                    {
-                      stack: [
-                        { text: `For ${settings.company_name}`, margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
-                        { text: 'Authorised signature', margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
-                      ],
-                      alignment: 'right',
-                      border: [false, false, false, false],
-                    }
-                  ]
-                ]
+                body: [[
+                  {
+                    stack: [
+                      { text: 'SUGAM number :', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                      { text: 'Received goods in good condition', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                      { text: 'Receiver sign', margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                      { text: `Vehicle number: ${vehicleNumber || '__________'}`, margin: [0, 0, 0, 8], style: 'footerNote', alignment: 'left' },
+                    ],
+                    alignment: 'left',
+                    border: [false, false, false, false],
+                  },
+                  {
+                    stack: [
+                      { text: `For ${settings.company_name}`, margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
+                      { text: 'Authorised signature', margin: [0, 0, 30, 8], style: 'footerNote', alignment: 'right' },
+                    ],
+                    alignment: 'right',
+                    border: [false, false, false, false],
+                  }
+                ]]
               },
               layout: 'noBorders',
               margin: [30, 0, 0, 0]
@@ -341,9 +331,9 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           grandTotalLabel: { fontSize: 10.8, bold: true, color: '#0f172a', alignment: 'right' },
           grandTotalValue: { fontSize: 10.8, bold: true, color: '#0f172a', alignment: 'right' },
         },
-        defaultStyle: { fontSize: 8 },
+        defaultStyle: { fontSize: 8, characterSpacing: 1 },
         pageSize: 'A4',
-        pageMargins: [30, 40, 30, 80], // Increased bottom margin for footer
+        pageMargins: [30, 40, 30, 120],
       };
 
       // Generate PDF and save (Electron or browser)
@@ -358,12 +348,14 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
           window.electronAPI.exportDatabase(buffer, exportPath);
           toast({ title: 'PDF Exported', description: `PDF saved to: ${exportPath}`, variant: 'default' });
           resetInvoice();
+          setVehicleNumber('');
           onBack();
         });
       } else {
         pdfMake.createPdf(docDefinition).download(`${invoiceNo}.pdf`);
         toast({ title: 'PDF Exported', description: 'PDF export successful!', variant: 'default' });
         resetInvoice();
+        setVehicleNumber('');
         onBack();
       }
     } catch (error) {
@@ -485,6 +477,16 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
                       value={toInputDate(billDate)}
                       onChange={(e) => setBillDate(fromInputDate(e.target.value))}
                       className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="vehicleNumber">Vehicle Number</Label>
+                    <Input
+                      id="vehicleNumber"
+                      value={vehicleNumber}
+                      onChange={e => setVehicleNumber(e.target.value)}
+                      className="mt-1"
+                      placeholder="Enter vehicle number"
                     />
                   </div>
                   <div>
@@ -701,7 +703,7 @@ const CreateInvoice = ({ onBack, editingInvoice }: CreateInvoiceProps) => {
 
         {/* Footer with credits */}
         <div className="mt-8 text-center text-sm text-slate-500">
-          <p>© 2025 SwiftBill v1.3.0 - Developed by Ranganath Saravana</p>
+          <p>© 2025 SwiftBill v{version} - Developed by Ranganath Saravana</p>
         </div>
       </div>
     </div>

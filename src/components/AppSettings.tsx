@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Save, Upload, Download, Settings } from 'lucide-react';
 import { useDatabaseStore, type AppSettings } from '@/store/databaseStore';
 import { useToast } from '@/hooks/use-toast';
+import { version } from '@/version';
 
 interface AppSettingsProps {
   onBack: () => void;
@@ -731,6 +732,10 @@ const AppSettingsComponent = ({ onBack }: AppSettingsProps) => {
             </div>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-8 text-center text-xs text-slate-400">
+          SwiftBill v{version}
+        </div>
       </div>
     </div>
   );

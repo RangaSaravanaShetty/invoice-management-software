@@ -86,9 +86,9 @@ const getSqlJsLocateFile = async () => {
     return () => wasmPath;
   } else {
     return file => {
-      const cdnPath = `https://sql.js.org/dist/${file}`;
-      console.log('[sql.js] Browser mode: using CDN path', cdnPath);
-      return cdnPath;
+      const localPath = '/sql-wasm.wasm';
+      console.log('[sql.js] Browser mode: using local path', localPath);
+      return localPath;
     };
   }
 };
@@ -285,6 +285,22 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       
       await get().loadMetrics();
       console.log('[Database] Initialization complete');
+
+      // After opening/creating the database, add migration logic:
+      // 1. Check and add vehicle_number, cgst_percent, sgst_percent columns if missing
+      try {
+        const pragma = db.exec("PRAGMA table_info(invoices);");
+        const columns = pragma[0]?.values?.map(row => row[1]) || [];
+        if (!columns.includes('vehicle_number')) {
+          db.exec('ALTER TABLE invoices ADD COLUMN vehicle_number TEXT;');
+        }
+        if (!columns.includes('cgst_percent')) {
+          db.exec('ALTER TABLE invoices ADD COLUMN cgst_percent REAL;');
+        }
+        if (!columns.includes('sgst_percent')) {
+          db.exec('ALTER TABLE invoices ADD COLUMN sgst_percent REAL;');
+        }
+      } catch (e) { console.warn('Migration check failed:', e); }
     } catch (error) {
       console.error('[sql.js] Failed to load WASM or initialize database:', error);
       throw error;

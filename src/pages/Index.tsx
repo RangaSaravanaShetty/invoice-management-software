@@ -9,6 +9,7 @@ import ManageItems from '@/components/ManageItems';
 import ViewInvoices from '@/components/ViewInvoices';
 import AppSettings from '@/components/AppSettings';
 import MonthlyStatement from '@/components/MonthlyStatement';
+import { version } from "../version";
 
 // Add global declaration for electronAPI
 declare global {
@@ -204,7 +205,7 @@ const Index = () => {
 
               {/* Footer with credits */}
               <div className="mt-12 text-center text-sm text-slate-500">
-                <p>© 2025 SwiftBill v1.3.0 - Developed by Ranganath Saravana</p>
+                <p>© 2025 SwiftBill v{version} - Developed by Ranganath Saravana</p>
               </div>
             </div>
           </div>

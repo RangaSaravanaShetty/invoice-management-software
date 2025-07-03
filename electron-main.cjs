@@ -5,6 +5,7 @@ const { createWriteStream, createReadStream } = require('fs');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const pipelineAsync = promisify(pipeline);
+const { version } = require('./src/version');
 
 let mainWindow;
 
@@ -12,7 +13,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'SwiftBill v1.3.0',
+    title: `SwiftBill v${version}`,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

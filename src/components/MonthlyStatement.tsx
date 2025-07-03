@@ -45,12 +45,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
       const invoiceYear = invoiceDate.getFullYear();
       return invoiceMonth === selectedMonth && invoiceYear === selectedYear;
     })
-    .sort((a, b) => {
-      // Extract numeric part for comparison
-      const numA = parseInt(a.invoice_no.replace(/\D/g, ''));
-      const numB = parseInt(b.invoice_no.replace(/\D/g, ''));
-      return numA - numB;
-    });
+    .sort((a, b) => a.invoice_no.localeCompare(b.invoice_no));
 
   const totalStats = {
     baseAmount: filteredInvoices.reduce((sum, inv) => sum + inv.base_amount, 0),
@@ -58,6 +53,14 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
     sgst: filteredInvoices.reduce((sum, inv) => sum + inv.sgst, 0),
     totalAmount: filteredInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
   };
+
+  // Calculate total quantity for all filtered invoices
+  const totalQty = filteredInvoices.reduce((sum, invoice) => {
+    try {
+      const itemsArr = JSON.parse(invoice.items_json || '[]');
+      return sum + itemsArr.reduce((s, it) => s + (it.quantity ?? 0), 0);
+    } catch (e) { return sum; }
+  }, 0);
 
   const handleExportPDF = async () => {
     setPdfExportLoading(true);
@@ -70,21 +73,30 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           { text: 'Invoice No', style: 'tableHeader' },
           { text: 'Date', style: 'tableHeader' },
           { text: 'Client Name', style: 'tableHeader' },
+          { text: 'Quantity', style: 'tableHeader' },
           { text: 'Amount', style: 'tableHeader' },
           { text: 'CGST', style: 'tableHeader' },
           { text: 'SGST', style: 'tableHeader' },
           { text: 'Total', style: 'tableHeader' },
         ],
-        ...filteredInvoices.map((item, idx) => [
-          { text: (idx + 1).toString(), alignment: 'center', fontSize: 8 },
-          { text: item.invoice_no || '', alignment: 'center', fontSize: 8 },
-          { text: parseDateFromDDMMYYYY(item.bill_date).toLocaleDateString(), alignment: 'center', fontSize: 8 },
-          { text: item.company_name || '', alignment: 'center', fontSize: 8 },
-          { text: item.base_amount?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
-          { text: item.cgst?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
-          { text: item.sgst?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
-          { text: item.total_amount?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
-        ]),
+        ...filteredInvoices.map((item, idx) => {
+          let totalQty = 0;
+          try {
+            const itemsArr = JSON.parse(item.items_json || '[]');
+            totalQty = itemsArr.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
+          } catch (e) { totalQty = 0; }
+          return [
+            { text: (idx + 1).toString(), alignment: 'center', fontSize: 8 },
+            { text: item.invoice_no || '', alignment: 'center', fontSize: 8 },
+            { text: parseDateFromDDMMYYYY(item.bill_date).toLocaleDateString(), alignment: 'center', fontSize: 8 },
+            { text: item.company_name || '', alignment: 'center', fontSize: 8 },
+            { text: totalQty.toString(), alignment: 'center', fontSize: 8 },
+            { text: item.base_amount?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
+            { text: item.cgst?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
+            { text: item.sgst?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
+            { text: item.total_amount?.toLocaleString('en-IN') ?? '', alignment: 'center', fontSize: 8 },
+          ];
+        }),
       ];
 
       // Prepare document definition with professional invoice styling
@@ -102,7 +114,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           {
             table: {
               headerRows: 1,
-              widths: [30, 60, 50, '*', 60, 45, 45, 60],
+              widths: [30, 60, 50, '*', 40, 60, 45, 45, 60],
               body: tableBody,
             },
             layout: {
@@ -121,7 +133,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           {
             text: [
               { text: 'Total Quantity: ', bold: true, fontSize: 9 },
-              { text: `${filteredInvoices.length}`, fontSize: 9 },
+              { text: `${totalQty}`, fontSize: 9 },
               { text: '\n' },
               { text: 'Base Amount: ', bold: true, fontSize: 9 },
               { text: `₹${totalStats.baseAmount.toLocaleString('en-IN')}`, fontSize: 9 },
@@ -154,7 +166,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
           amountWords: { fontSize: 10, italics: true, color: '#64748b', margin: [0, 8, 0, 0] },
           endStatement: { fontSize: 12, bold: true, alignment: 'center', margin: [0, 10, 0, 10], color: '#0f172a' },
         },
-        defaultStyle: { fontSize: 10 },
+        defaultStyle: { fontSize: 10, characterSpacing: 1 },
         pageSize: 'A4',
         pageMargins: [30, 40, 30, 40],
       };
@@ -317,6 +329,7 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                       <TableHead className="text-center">Invoice No</TableHead>
                       <TableHead className="text-center">Date</TableHead>
                       <TableHead className="text-center">Client</TableHead>
+                      <TableHead className="text-center">Quantity</TableHead>
                       <TableHead className="text-center">Base Amount</TableHead>
                       <TableHead className="text-center">CGST</TableHead>
                       <TableHead className="text-center">SGST</TableHead>
@@ -324,29 +337,40 @@ const MonthlyStatement = ({ onBack }: MonthlyStatementProps) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredInvoices.map((invoice) => (
-                      <TableRow key={invoice.id} className="hover:bg-slate-50">
-                        <TableCell className="font-medium text-center">{invoice.invoice_no}</TableCell>
-                        <TableCell className="text-center">
-                          {parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-slate-600 text-center">{invoice.company_name}</TableCell>
-                        <TableCell className="text-center">
-                          {invoice.base_amount.toLocaleString('en-IN')}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {invoice.cgst.toLocaleString('en-IN')}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {invoice.sgst.toLocaleString('en-IN')}
-                        </TableCell>
-                        <TableCell className="text-center font-medium text-green-600">
-                          {invoice.total_amount.toLocaleString('en-IN')}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredInvoices.map((invoice) => {
+                      let totalQty = 0;
+                      try {
+                        const itemsArr = JSON.parse(invoice.items_json || '[]');
+                        totalQty = itemsArr.reduce((sum, it) => sum + (it.quantity ?? 0), 0);
+                      } catch (e) { totalQty = 0; }
+                      return (
+                        <TableRow key={invoice.id} className="hover:bg-slate-50">
+                          <TableCell className="font-medium text-center">{invoice.invoice_no}</TableCell>
+                          <TableCell className="text-center">
+                            {parseDateFromDDMMYYYY(invoice.bill_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-slate-600 text-center">{invoice.company_name}</TableCell>
+                          <TableCell className="text-center">{totalQty}</TableCell>
+                          <TableCell className="text-center">
+                            {invoice.base_amount.toLocaleString('en-IN')}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {invoice.cgst.toLocaleString('en-IN')}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {invoice.sgst.toLocaleString('en-IN')}
+                          </TableCell>
+                          <TableCell className="text-center font-medium text-green-600">
+                            {invoice.total_amount.toLocaleString('en-IN')}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     <TableRow className="border-t-2 border-slate-200 bg-slate-50 font-medium">
                       <TableCell colSpan={3} className="text-center font-bold">Total:</TableCell>
+                      <TableCell className="text-center font-bold">
+                        {totalQty}
+                      </TableCell>
                       <TableCell className="text-center font-bold">
                         {totalStats.baseAmount.toLocaleString('en-IN')}
                       </TableCell>
